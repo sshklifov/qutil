@@ -211,3 +211,77 @@ endfunction
 
 command! -nargs=0 -bang Repos call <SID>ShowWorkspaces('<bang>')
 """"""""""""""""""""""""""""""""""""""ShowWorkspaces""""""""""""""""""""""""""""""""""""""" }}}
+
+""""""""""""""""""""""""""""""""""""""Make""""""""""""""""""""""""""""""""""""""" {{{
+function! Make(command, bang)
+  function! OnStdout(id, data, event)
+    for data in a:data
+      let text = substitute(data, '\n', '', 'g')
+      if len(text) > 0
+        let m = matchlist(text, '\[ *\([0-9]\+%\)\]')
+        if len(m) > 1 && !empty(m[1])
+          let g:statusline_dict['make'] = m[1]
+        endif
+      endif
+    endfor
+  endfunction
+
+  function! OnStderr(id, data, event)
+    for data in a:data
+      let text = substitute(data, '\n', '', 'g')
+      if len(text) > 0
+        let m = matchlist(text, '\(.*\):\([0-9]\+\):\([0-9]\+\): \(.*\)')
+        if len(m) >= 5
+          let file = m[1]
+          let lnum = m[2]
+          let col = m[3]
+          let text = m[4]
+          if filereadable(file) && (stridx(text, "error:") >= 0 || stridx(text, "warning:") >= 0)
+            let item = #{filename: file, text: text, lnum: lnum, col: col}
+            call add(g:make_error_list, item)
+          endif
+        endif
+      endif
+    endfor
+  endfunction
+
+  function! OnExit(id, code, event)
+    if a:code == 0
+      echom "Make successful!"
+      exe "LspRestart"
+    else
+      echom "Make failed!"
+      if exists("g:make_error_list") && len(g:make_error_list) > 0
+        call setqflist([], ' ', #{title: "Make", items: g:make_error_list})
+        copen
+      endif
+    endif
+    silent! unlet g:make_error_list
+    silent! unlet g:statusline_dict['make']
+  endfunction
+
+  if a:bang == ""
+    let g:make_error_list = []
+    let opts = #{cwd: FugitiveWorkTree(), on_stdout: function("OnStdout"), on_stderr: function("OnStderr"), on_exit: function("OnExit")}
+    call jobstart(a:command, opts)
+  else
+    bot new
+    let id = termopen(a:command, #{cwd: FugitiveWorkTree(), on_exit: function("OnExit")})
+    call cursor("$", 1)
+  endif
+endfunction
+
+function! MakeTargets(makefile)
+  let cmd = 'make -f ' . a:makefile . ' '
+  let complete = 'complete -C ' . shellescape(cmd)
+  let output = systemlist(["/usr/bin/fish", "-c", complete])
+  " Remove color codes
+  let output = filter(output, "char2nr(v:val[0]) != 27")
+  " Split by tab
+  let pairs = map(output, "split(v:val, nr2char(9))")
+  " Filter out targets only
+  let target_pairs = filter(pairs, "len(v:val) == 2 && v:val[1] == 'Target'")
+  " Return the targets
+  return map(target_pairs, "v:val[0]")
+endfunction
+""""""""""""""""""""""""""""""""""""""Make""""""""""""""""""""""""""""""""""""""" }}}

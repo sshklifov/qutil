@@ -5,16 +5,22 @@ if exists(':Old')
 endif
 
 function! ToQuickfix(files, title)
-  let items = map(a:files, "#{filename: v:val}")
-  if len(items) <= 0
+  if len(a:files) <= 0
     echo "No entries"
+    return
+  endif
+
+  if type(a:files[0]) == type(#{})
+    let items = a:files
   else
-    call setqflist([], ' ', #{title: a:title, items: items})
-    if len(items) == 1
-      cc
-    else
-      copen
-    endif
+    let items = map(a:files, "#{filename: v:val}")
+  endif
+
+  call setqflist([], ' ', #{title: a:title, items: items})
+  if len(items) == 1
+    cc
+  else
+    copen
   endif
   copen
 endfunction
@@ -40,7 +46,7 @@ function! s:OldFiles(read_shada)
 
   let items = deepcopy(v:oldfiles)
   let items = map(items, {_, f -> {"filename": f, "lnum": 1, 'text': fnamemodify(f, ":t")}})
-  call items->ToQuickfix("Oldfiles")
+  call ToQuickfix(items, "Oldfiles")
 endfunction
 
 command -nargs=0 -bang Old call s:OldFiles(<bang>0)
@@ -124,30 +130,24 @@ nnoremap <silent> <c-o> :call <SID>Jump("o")<CR>
 
 """"""""""""""""""""""""""""""""""""""ShowBuffers""""""""""""""""""""""""""""""""""""""" {{{
 function! s:ShowBuffers(pat)
-  let pat = ".*" . a:pat . ".*"
-  if a:pat !~# "[A-Z]"
-    let pat = '\c' . pat
-  else
-    let pat = '\C' . pat
-  endif
-
-  function! s:GetBufferItem(_, n) closure
+  function! s:GetBufferItem(pat, m, n) closure
     let name = expand('#' . a:n . ':p')
-    if !filereadable(name) || match(name, pat) < 0
-      return {}
+    if !filereadable(name) || stridx(name, a:pat) < 0
+      return #{}
     endif
 
     let bufinfo = getbufinfo(a:n)[0]
-    let text = "" . a:n
+    let lnum = bufinfo["lnum"]
+    let text = string(a:n)
     if bufinfo["changed"]
       let text = text . " (modified)"
     endif
-    return {"bufnr": a:n, "text": text, "lnum": bufinfo["lnum"]}
+    return #{bufnr: a:n, text: text, lnum: lnum}
   endfunction
 
-  let items = map(range(1, bufnr('$')), function("s:GetBufferItem"))
+  let items = map(range(1, bufnr('$')), function("s:GetBufferItem", [a:pat]))
   let items = filter(items, "!empty(v:val)")
-  call items->ToQuickfix("Buffers")
+  call ToQuickfix(items, "Buffers")
 endfunction
 
 nnoremap <silent> <leader>buf :call <SID>ShowBuffers("")<CR>
@@ -206,7 +206,7 @@ function! s:ShowWorkspaces(bang)
   let git = uniq(sort(git))
   let repos = map(git, "fnamemodify(v:val, ':h')")
   let items = map(repos, {_, f -> {"filename": f, "lnum": 1, 'text': fnamemodify(f, ":t")}})
-  call items->ToQuickfix("Git")
+  call ToQuickfix(items, "Git")
 endfunction
 
 command! -nargs=0 -bang Repos call <SID>ShowWorkspaces('<bang>')

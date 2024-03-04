@@ -4,15 +4,18 @@ if exists(':Old')
   finish
 endif
 
-function! s:OpenQfResults()
-  let len = getqflist({"size": 1})['size']
-  if len == 0
-    echo "No results"
-  elseif len == 1
-    cc
+function! ToQuickfix(files, title)
+  let items = map(a:files, "#{filename: v:val}")
+  if len(items) <= 0
+    echo "No entries"
   else
+    call setqflist([], ' ', #{title: a:title, items: items})
     copen
+    if len(items) == 1
+      cc
+    endif
   endif
+  copen
 endfunction
 
 function! s:IsQfOpen()
@@ -36,8 +39,7 @@ function! s:OldFiles(read_shada)
 
   let items = deepcopy(v:oldfiles)
   let items = map(items, {_, f -> {"filename": f, "lnum": 1, 'text': fnamemodify(f, ":t")}})
-  call setqflist([], ' ', {'title': 'Oldfiles', 'items': items})
-  call s:OpenQfResults()
+  call items->ToQuickfix("Oldfiles")
 endfunction
 
 command -nargs=0 -bang Old call s:OldFiles(<bang>0)
@@ -144,8 +146,7 @@ function! s:ShowBuffers(pat)
 
   let items = map(range(1, bufnr('$')), function("s:GetBufferItem"))
   let items = filter(items, "!empty(v:val)")
-  call setqflist([], 'r', {'title' : 'Buffers', 'items' : items})
-  call s:OpenQfResults()
+  call items->ToQuickfix("Buffers")
 endfunction
 
 nnoremap <silent> <leader>buf :call <SID>ShowBuffers("")<CR>
@@ -157,11 +158,10 @@ function! BufferCompl(ArgLead, CmdLine, CursorPos)
     return []
   endif
 
-  let pat = ".*" . a:ArgLead . ".*"
-  if pat !~# "[A-Z]"
-    let pat = '\c' . pat
+  if a:ArgLead !~# "[A-Z]"
+    let pat = '\c' . a:ArgLead
   else
-    let pat = '\C' . pat
+    let pat = '\C' . a:ArgLead
   endif
 
   let names = map(range(1, bufnr('$')), "bufname(v:val)")
@@ -205,8 +205,7 @@ function! s:ShowWorkspaces(bang)
   let git = uniq(sort(git))
   let repos = map(git, "fnamemodify(v:val, ':h')")
   let items = map(repos, {_, f -> {"filename": f, "lnum": 1, 'text': fnamemodify(f, ":t")}})
-  call setqflist([], ' ', {'title': 'Git', 'items': items})
-  call s:OpenQfResults()
+  call items->ToQuickfix("Git")
 endfunction
 
 command! -nargs=0 -bang Repos call <SID>ShowWorkspaces('<bang>')

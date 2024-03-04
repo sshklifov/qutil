@@ -10,9 +10,10 @@ function! ToQuickfix(files, title)
     echo "No entries"
   else
     call setqflist([], ' ', #{title: a:title, items: items})
-    copen
     if len(items) == 1
       cc
+    else
+      copen
     endif
   endif
   copen

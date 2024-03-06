@@ -22,7 +22,6 @@ function! ToQuickfix(files, title)
   else
     copen
   endif
-  copen
 endfunction
 
 function! s:IsQfOpen()

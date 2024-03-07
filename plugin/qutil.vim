@@ -24,6 +24,25 @@ function! ToQuickfix(files, title)
   endif
 endfunction
 
+function ArgFilter(list, args)
+  return filter(a:list, "stridx(v:val, a:args) >= 0")
+endfunction
+
+function! SplitItems(list, args)
+  let compl = []
+  for item in a:list
+    let parts = split(item, "/")
+    for part in parts
+      if stridx(part, a:args) >= 0
+        call add(compl, part)
+      endif
+    endfor
+  endfor
+  let res = uniq(sort(compl))
+  let exclude = ["home", $USER]
+  return filter(res, "index(exclude, v:val) < 0")
+endfunction
+
 function! s:IsQfOpen()
   let tabnr = tabpagenr()
   let wins = filter(getwininfo(), {_, w -> w['tabnr'] == tabnr && w['quickfix'] == 1 && w['loclist'] == 0})
@@ -38,17 +57,18 @@ function! s:IsBufferQf()
 endfunction
 
 """"""""""""""""""""""""""""""""""""""Old""""""""""""""""""""""""""""""""""""""" {{{
-function! s:OldFiles(read_shada)
-  if a:read_shada
-    rsh!
-  endif
-
-  let items = deepcopy(v:oldfiles)
-  let items = map(items, {_, f -> {"filename": f, "lnum": 1, 'text': fnamemodify(f, ":t")}})
-  call ToQuickfix(items, "Oldfiles")
+function! s:GetOldFiles()
+  return deepcopy(v:oldfiles)
 endfunction
 
-command -nargs=0 -bang Old call s:OldFiles(<bang>0)
+function! OldCompl(ArgLead, CmdLine, CursorPos)
+  if a:CursorPos < len(a:CmdLine)
+    return []
+  endif
+  return s:GetOldFiles()->SplitItems(a:ArgLead)
+endfunction
+
+command -nargs=? -complete=customlist,OldCompl Old call s:GetOldFiles()->ArgFilter(<q-args>)->ToQuickfix("Old")
 """"""""""""""""""""""""""""""""""""""Old""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Cdelete""""""""""""""""""""""""""""""""""""""" {{{
@@ -153,32 +173,19 @@ nnoremap <silent> <leader>buf :call <SID>ShowBuffers("")<CR>
 """"""""""""""""""""""""""""""""""""""Buffer""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Buffer""""""""""""""""""""""""""""""""""""""" {{{
+function! s:GetBuffers()
+  let names = map(range(1, bufnr('$')), "bufname(v:val)")
+  return filter(names, "filereadable(v:val)")
+endfunction
+
 function! BufferCompl(ArgLead, CmdLine, CursorPos)
   if a:CursorPos < len(a:CmdLine)
     return []
   endif
-
-  if a:ArgLead !~# "[A-Z]"
-    let pat = '\c' . a:ArgLead
-  else
-    let pat = '\C' . a:ArgLead
-  endif
-
-  let names = map(range(1, bufnr('$')), "bufname(v:val)")
-  let names = filter(names, "filereadable(v:val)")
-  let compl = []
-  for name in names
-    let parts = split(name, "/")
-    for part in parts
-      if match(part, pat) >= 0
-        call add(compl, part)
-      endif
-    endfor
-  endfor
-  return uniq(sort(compl))
+  return s:GetBuffers()->SplitItems(a:ArgLead)
 endfunction
 
-command! -nargs=? -complete=customlist,BufferCompl Buffer call <SID>ShowBuffers(<q-args>)
+command! -nargs=? -complete=customlist,BufferCompl Buffer call s:GetBuffers()->ArgFilter(<q-args>)->ToQuickfix("Buffer")
 """"""""""""""""""""""""""""""""""""""Buffer""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""ToggleQf""""""""""""""""""""""""""""""""""""""" {{{
@@ -193,23 +200,24 @@ endfunction
 nnoremap <silent> <leader>cc :call <SID>ToggleQf()<CR>
 """"""""""""""""""""""""""""""""""""""ToggleQf""""""""""""""""""""""""""""""""""""""" }}}
 
-""""""""""""""""""""""""""""""""""""""ShowWorkspaces""""""""""""""""""""""""""""""""""""""" {{{
-function! s:ShowWorkspaces(bang)
-  if empty(a:bang)
-    let names = deepcopy(v:oldfiles)
-  else
-    let names = map(range(1, bufnr('$')), "bufname(v:val)")
-    let names = filter(names, "filereadable(v:val)")
-  endif
+""""""""""""""""""""""""""""""""""""""Repos""""""""""""""""""""""""""""""""""""""" {{{
+function! s:GetRepos()
+  let names = deepcopy(v:oldfiles)
   let git = filter(map(names, "FugitiveExtractGitDir(v:val)"), "!empty(v:val)")
   let git = uniq(sort(git))
   let repos = map(git, "fnamemodify(v:val, ':h')")
-  let items = map(repos, {_, f -> {"filename": f, "lnum": 1, 'text': fnamemodify(f, ":t")}})
-  call ToQuickfix(items, "Git")
+  return repos
 endfunction
 
-command! -nargs=0 -bang Repos call <SID>ShowWorkspaces('<bang>')
-""""""""""""""""""""""""""""""""""""""ShowWorkspaces""""""""""""""""""""""""""""""""""""""" }}}
+function! ReposCompl(ArgLead, CmdLine, CursorPos)
+  if a:CursorPos < len(a:CmdLine)
+    return []
+  endif
+  return s:GetRepos()->SplitItems(a:ArgLead)
+endfunction
+
+command! -nargs=? -complete=customlist,ReposCompl Repos call s:GetRepos()->ArgFilter(<q-args>)->ToQuickfix("Repos")
+""""""""""""""""""""""""""""""""""""""Repos""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Make""""""""""""""""""""""""""""""""""""""" {{{
 function! Make(command, bang)

@@ -31,7 +31,8 @@ endfunction
 function! SplitItems(list, args)
   let compl = []
   for item in a:list
-    let parts = split(item, "/")
+    let fullname = fnamemodify(item, ':p')
+    let parts = split(fullname, "/")
     for part in parts
       if stridx(part, a:args) >= 0
         call add(compl, part)

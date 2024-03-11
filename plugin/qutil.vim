@@ -89,7 +89,7 @@ function! s:OpenJumpList()
 
   for i in range(len(entries))
     if !bufloaded(entries[i]['bufnr'])
-      let entries[i] = #{text: "Not loaded"}
+      let entries[i] = #{text: "Not loaded", valid: 0}
     else
       let lines = getbufline(entries[i]['bufnr'], entries[i]['lnum'])
       if len(lines) > 0

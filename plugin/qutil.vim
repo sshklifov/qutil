@@ -221,7 +221,7 @@ command! -nargs=? -complete=customlist,ReposCompl Repos call s:GetRepos()->ArgFi
 """"""""""""""""""""""""""""""""""""""Repos""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Make""""""""""""""""""""""""""""""""""""""" {{{
-function! Make(command, bang)
+function! Make(...)
   function! OnStdout(id, data, event)
     for data in a:data
       let text = substitute(data, '\n', '', 'g')
@@ -265,17 +265,20 @@ function! Make(command, bang)
       endif
     endif
     silent! unlet g:make_error_list
-    silent! unlet g:statusline_dict['make']
+    let g:statusline_dict['make'] = ''
   endfunction
 
-  if a:bang == ""
+  let command = get(a:, 1, "")
+  let bang = get(a:, 2, "")
+  if bang == ""
     let g:make_error_list = []
     let opts = #{cwd: FugitiveWorkTree(), on_stdout: function("OnStdout"), on_stderr: function("OnStderr"), on_exit: function("OnExit")}
-    call jobstart(a:command, opts)
+    return jobstart(command, opts)
   else
     bot new
-    let id = termopen(a:command, #{cwd: FugitiveWorkTree(), on_exit: function("OnExit")})
+    let id = termopen(command, #{cwd: FugitiveWorkTree(), on_exit: function("OnExit")})
     call cursor("$", 1)
+    return id
   endif
 endfunction
 

@@ -296,3 +296,26 @@ function! MakeTargets(makefile)
   return map(target_pairs, "v:val[0]")
 endfunction
 """"""""""""""""""""""""""""""""""""""Make""""""""""""""""""""""""""""""""""""""" }}}
+
+""""""""""""""""""""""""""""""""""""""Mark""""""""""""""""""""""""""""""""""""""" {{{
+function! s:OpenMarks(bang)
+  if a:bang == "!"
+    let nrs = range(1, bufnr("$"))
+  else
+    let nrs = [bufnr()]
+  endif
+
+  let list = []
+  for i in nrs
+    if buflisted(i)
+      let buf_marks = getmarklist(i)
+      let buf_marks = map(buf_marks, "#{bufnr: i, lnum: v:val.pos[1], col: v:val.pos[2], text: v:val.mark[1]}")
+      let buf_marks = filter(buf_marks, 'v:val.text =~ "\\a"')
+      let list += buf_marks
+    endif
+  endfor
+  call ToQuickfix(list, 'Marks')
+endfunction
+
+command! -nargs=0 -bang Mark call <SID>OpenMarks("<bang>")
+""""""""""""""""""""""""""""""""""""""Mark""""""""""""""""""""""""""""""""""""""" }}}

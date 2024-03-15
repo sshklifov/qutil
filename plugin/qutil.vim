@@ -16,10 +16,14 @@ function! ToQuickfix(files, title)
     let items = map(a:files, "#{filename: v:val}")
   endif
 
-  call setqflist([], ' ', #{title: a:title, items: items})
   if len(items) == 1
-    cc
+    if has_key(items[0], 'bufnr')
+      exe "buffer " . items[0].buffnr
+    else
+      exe "edit " . items[0].filename
+    endif
   else
+    call setqflist([], ' ', #{title: a:title, items: items})
     copen
   endif
 endfunction
@@ -59,7 +63,7 @@ endfunction
 
 """"""""""""""""""""""""""""""""""""""Old""""""""""""""""""""""""""""""""""""""" {{{
 function! s:GetOldFiles()
-  return deepcopy(v:oldfiles)
+  return filter(deepcopy(v:oldfiles), "filereadable(v:val)")
 endfunction
 
 function! OldCompl(ArgLead, CmdLine, CursorPos)
@@ -150,7 +154,7 @@ nnoremap <silent> <c-o> :call <SID>Jump("o")<CR>
 
 """"""""""""""""""""""""""""""""""""""ShowBuffers""""""""""""""""""""""""""""""""""""""" {{{
 function! s:ShowBuffers(pat)
-  function! s:GetBufferItem(pat, m, n) closure
+  function! GetBufferItem(pat, m, n) closure
     let name = expand('#' . a:n . ':p')
     if !filereadable(name) || stridx(name, a:pat) < 0
       return #{}
@@ -165,7 +169,7 @@ function! s:ShowBuffers(pat)
     return #{bufnr: a:n, text: text, lnum: lnum}
   endfunction
 
-  let items = map(range(1, bufnr('$')), function("s:GetBufferItem", [a:pat]))
+  let items = map(range(1, bufnr('$')), funcref("GetBufferItem", [a:pat]))
   let items = filter(items, "!empty(v:val)")
   call ToQuickfix(items, "Buffers")
 endfunction
@@ -220,6 +224,24 @@ endfunction
 command! -nargs=? -complete=customlist,ReposCompl Repos call s:GetRepos()->ArgFilter(<q-args>)->ToQuickfix("Repos")
 """"""""""""""""""""""""""""""""""""""Repos""""""""""""""""""""""""""""""""""""""" }}}
 
+""""""""""""""""""""""""""""""""""""""CmdCompl""""""""""""""""""""""""""""""""""""""" {{{
+function! CmdCompl(cmdline)
+  let complete = 'complete -C ' . shellescape(a:cmdline)
+  let output = system(["/usr/bin/fish", "-c", complete])
+
+  " Remove color codes
+  let esc = 27
+  let pat = printf('%c][^\\]*%c\\', esc, esc)
+  let output = substitute(output, pat, "", "g")
+
+  " Split into lines
+  let output = split(output, nr2char(10))
+  " Split by tab (remove completion description)
+  let compl = map(output, "split(v:val, nr2char(9))[0]")
+  return compl
+endfunction
+""""""""""""""""""""""""""""""""""""""CmdCompl""""""""""""""""""""""""""""""""""""""" }}}
+
 """"""""""""""""""""""""""""""""""""""Make""""""""""""""""""""""""""""""""""""""" {{{
 function! Make(...)
   function! OnStdout(id, data, event)
@@ -272,28 +294,14 @@ function! Make(...)
   let bang = get(a:, 2, "")
   if bang == ""
     let g:make_error_list = []
-    let opts = #{cwd: FugitiveWorkTree(), on_stdout: function("OnStdout"), on_stderr: function("OnStderr"), on_exit: function("OnExit")}
+    let opts = #{cwd: FugitiveWorkTree(), on_stdout: funcref("OnStdout"), on_stderr: funcref("OnStderr"), on_exit: funcref("OnExit")}
     return jobstart(command, opts)
   else
     bot new
-    let id = termopen(command, #{cwd: FugitiveWorkTree(), on_exit: function("OnExit")})
+    let id = termopen(command, #{cwd: FugitiveWorkTree(), on_exit: funcref("OnExit")})
     call cursor("$", 1)
     return id
   endif
-endfunction
-
-function! MakeTargets(makefile)
-  let cmd = 'make -f ' . a:makefile . ' '
-  let complete = 'complete -C ' . shellescape(cmd)
-  let output = systemlist(["/usr/bin/fish", "-c", complete])
-  " Remove color codes
-  let output = filter(output, "char2nr(v:val[0]) != 27")
-  " Split by tab
-  let pairs = map(output, "split(v:val, nr2char(9))")
-  " Filter out targets only
-  let target_pairs = filter(pairs, "len(v:val) == 2 && v:val[1] == 'Target'")
-  " Return the targets
-  return map(target_pairs, "v:val[0]")
 endfunction
 """"""""""""""""""""""""""""""""""""""Make""""""""""""""""""""""""""""""""""""""" }}}
 

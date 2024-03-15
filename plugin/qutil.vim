@@ -319,3 +319,31 @@ endfunction
 
 command! -nargs=0 -bang Mark call <SID>OpenMarks("<bang>")
 """"""""""""""""""""""""""""""""""""""Mark""""""""""""""""""""""""""""""""""""""" }}}
+
+""""""""""""""""""""""""""""""""""""""Cff""""""""""""""""""""""""""""""""""""""" {{{
+function! s:QuickfixFileFilt(bang, arg)
+  let expr = 'stridx(expand("#".v:val.bufnr.":p"), a:arg)'
+  if empty(a:bang)
+    let list = filter(getqflist(), expr . ' >= 0')
+  else
+    let list = filter(getqflist(), expr . ' < 0')
+  endif
+  call ToQuickfix(list, "QuickfixFilt")
+endfunction
+
+command! -nargs=1 -bang Cff call <SID>QuickfixFileFilt("<bang>", <q-args>)
+""""""""""""""""""""""""""""""""""""""Cff""""""""""""""""""""""""""""""""""""""" }}}
+
+""""""""""""""""""""""""""""""""""""""Cf""""""""""""""""""""""""""""""""""""""" {{{
+function! s:QuickfixTextFilt(bang, arg)
+  let expr = 'stridx(v:val.text, a:arg)'
+  if empty(a:bang)
+    let list = filter(getqflist(), expr . ' >= 0')
+  else
+    let list = filter(getqflist(), expr . ' < 0')
+  endif
+  call ToQuickfix(list, "QuickFilt")
+endfunction
+
+command! -nargs=1 -bang Cf call <SID>QuickfixTextFilt("<bang>", <q-args>)
+""""""""""""""""""""""""""""""""""""""Cf""""""""""""""""""""""""""""""""""""""" }}}

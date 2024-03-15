@@ -9,13 +9,11 @@ function! ToQuickfix(files, title)
     echo "No entries"
     return
   endif
-
   if type(a:files[0]) == type(#{})
     let items = a:files
   else
     let items = map(a:files, "#{filename: v:val}")
   endif
-
   if len(items) == 1
     if has_key(items[0], 'bufnr')
       exe "buffer " . items[0].buffnr
@@ -46,6 +44,12 @@ function! SplitItems(list, args)
   let res = uniq(sort(compl))
   let exclude = ["home", $USER]
   return filter(res, "index(exclude, v:val) < 0")
+endfunction
+
+function! TailItems(list, args)
+  let items = map(a:list, 'fnamemodify(v:val, ":t")')
+  let items = filter(items, 'stridx(v:val, a:args) >= 0')
+  return uniq(sort(items))
 endfunction
 
 function! s:IsQfOpen()
@@ -207,18 +211,17 @@ nnoremap <silent> <leader>cc :call <SID>ToggleQf()<CR>
 
 """"""""""""""""""""""""""""""""""""""Repos""""""""""""""""""""""""""""""""""""""" {{{
 function! s:GetRepos()
-  let names = deepcopy(v:oldfiles)
-  let git = filter(map(names, "FugitiveExtractGitDir(v:val)"), "!empty(v:val)")
-  let git = uniq(sort(git))
+  let old = filter(deepcopy(v:oldfiles), "filereadable(v:val) || isdirectory(v:val)")
+  let git = filter(map(old,  "FugitiveExtractGitDir(v:val)"), "!empty(v:val)")
   let repos = map(git, "fnamemodify(v:val, ':h')")
-  return repos
+  return uniq(sort(repos))
 endfunction
 
 function! ReposCompl(ArgLead, CmdLine, CursorPos)
   if a:CursorPos < len(a:CmdLine)
     return []
   endif
-  return s:GetRepos()->SplitItems(a:ArgLead)
+  return s:GetRepos()->TailItems(a:ArgLead)
 endfunction
 
 command! -nargs=? -complete=customlist,ReposCompl Repos call s:GetRepos()->ArgFilter(<q-args>)->ToQuickfix("Repos")

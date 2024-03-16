@@ -4,7 +4,7 @@ if exists(':Old')
   finish
 endif
 
-function! ToQuickfix(files, title)
+function! DropInQf(files, title)
   if len(a:files) <= 0
     echo "No entries"
     return
@@ -25,6 +25,21 @@ function! ToQuickfix(files, title)
     call setqflist([], ' ', #{title: a:title, items: items})
     copen
   endif
+endfunction
+
+function! DisplayInQf(files, title)
+  if len(a:files) <= 0
+    echo "No entries"
+    return
+  endif
+  if type(a:files[0]) == type(#{})
+    let items = a:files
+  else
+    let items = map(a:files, "#{filename: v:val}")
+  endif
+
+  call setqflist([], ' ', #{title: a:title, items: items})
+  copen
 endfunction
 
 function ArgFilter(list, args)
@@ -78,7 +93,7 @@ function! OldCompl(ArgLead, CmdLine, CursorPos)
   return s:GetOldFiles()->TailItems(a:ArgLead)
 endfunction
 
-command -nargs=? -complete=customlist,OldCompl Old call s:GetOldFiles()->ArgFilter(<q-args>)->ToQuickfix("Old")
+command -nargs=? -complete=customlist,OldCompl Old call s:GetOldFiles()->ArgFilter(<q-args>)->DropInQf("Old")
 """"""""""""""""""""""""""""""""""""""Old""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Cdelete""""""""""""""""""""""""""""""""""""""" {{{
@@ -176,7 +191,7 @@ function! s:ShowBuffers(pat)
 
   let items = map(range(1, bufnr('$')), funcref("GetBufferItem", [a:pat]))
   let items = filter(items, "!empty(v:val)")
-  call ToQuickfix(items, "Buffers")
+  call DropInQf(items, "Buffers")
 endfunction
 
 nnoremap <silent> <leader>buf :call <SID>ShowBuffers("")<CR>
@@ -195,7 +210,7 @@ function! BufferCompl(ArgLead, CmdLine, CursorPos)
   return s:GetBuffers()->SplitItems(a:ArgLead)
 endfunction
 
-command! -nargs=? -complete=customlist,BufferCompl Buffer call s:GetBuffers()->ArgFilter(<q-args>)->ToQuickfix("Buffer")
+command! -nargs=? -complete=customlist,BufferCompl Buffer call s:GetBuffers()->ArgFilter(<q-args>)->DropInQf("Buffer")
 """"""""""""""""""""""""""""""""""""""Buffer""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Modified""""""""""""""""""""""""""""""""""""""" {{{
@@ -206,7 +221,7 @@ function! s:GetModified()
   return filter(names, "filereadable(v:val)")
 endfunction
 
-command! -nargs=0 Modified call s:GetModified()->ToQuickfix("Modified")
+command! -nargs=0 Modified call s:GetModified()->DisplayInQf("Modified")
 """"""""""""""""""""""""""""""""""""""Modified""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Cfdo""""""""""""""""""""""""""""""""""""""" {{{
@@ -257,7 +272,7 @@ function! ReposCompl(ArgLead, CmdLine, CursorPos)
   return s:GetRepos()->TailItems(a:ArgLead)
 endfunction
 
-command! -nargs=? -complete=customlist,ReposCompl Repos call s:GetRepos()->ArgFilter(<q-args>)->ToQuickfix("Repos")
+command! -nargs=? -complete=customlist,ReposCompl Repos call s:GetRepos()->ArgFilter(<q-args>)->DropInQf("Repos")
 """"""""""""""""""""""""""""""""""""""Repos""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""CmdCompl""""""""""""""""""""""""""""""""""""""" {{{
@@ -358,7 +373,7 @@ function! s:OpenMarks(bang)
       let list += buf_marks
     endif
   endfor
-  call ToQuickfix(list, 'Marks')
+  call DisplayInQf(list, 'Marks')
 endfunction
 
 command! -nargs=0 -bang Mark call <SID>OpenMarks("<bang>")
@@ -372,7 +387,7 @@ function! s:QuickfixFileFilt(bang, arg)
   else
     let list = filter(getqflist(), expr . ' < 0')
   endif
-  call ToQuickfix(list, "QuickfixFilt")
+  call DisplayInQf(list, "Cff")
 endfunction
 
 command! -nargs=1 -bang Cff call <SID>QuickfixFileFilt("<bang>", <q-args>)
@@ -386,7 +401,7 @@ function! s:QuickfixTextFilt(bang, arg)
   else
     let list = filter(getqflist(), expr . ' < 0')
   endif
-  call ToQuickfix(list, "QuickFilt")
+  call DisplayInQf(list, "Cf")
 endfunction
 
 command! -nargs=1 -bang Cf call <SID>QuickfixTextFilt("<bang>", <q-args>)

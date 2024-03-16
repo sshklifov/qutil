@@ -14,6 +14,7 @@ function! ToQuickfix(files, title)
   else
     let items = map(a:files, "#{filename: v:val}")
   endif
+
   if len(items) == 1
     if has_key(items[0], 'bufnr')
       exe "buffer " . items[0].buffnr
@@ -74,7 +75,7 @@ function! OldCompl(ArgLead, CmdLine, CursorPos)
   if a:CursorPos < len(a:CmdLine)
     return []
   endif
-  return s:GetOldFiles()->SplitItems(a:ArgLead)
+  return s:GetOldFiles()->TailItems(a:ArgLead)
 endfunction
 
 command -nargs=? -complete=customlist,OldCompl Old call s:GetOldFiles()->ArgFilter(<q-args>)->ToQuickfix("Old")
@@ -196,6 +197,38 @@ endfunction
 
 command! -nargs=? -complete=customlist,BufferCompl Buffer call s:GetBuffers()->ArgFilter(<q-args>)->ToQuickfix("Buffer")
 """"""""""""""""""""""""""""""""""""""Buffer""""""""""""""""""""""""""""""""""""""" }}}
+
+""""""""""""""""""""""""""""""""""""""Modified""""""""""""""""""""""""""""""""""""""" {{{
+function! s:GetModified()
+  let infos = filter(getbufinfo(), "v:val.changed")
+  let nrs = map(infos, "v:val.bufnr")
+  let names = map(nrs, 'expand("#" . v:val . ":p")')
+  return filter(names, "filereadable(v:val)")
+endfunction
+
+command! -nargs=0 Modified call s:GetModified()->ToQuickfix("Modified")
+""""""""""""""""""""""""""""""""""""""Modified""""""""""""""""""""""""""""""""""""""" }}}
+
+""""""""""""""""""""""""""""""""""""""Cfdo""""""""""""""""""""""""""""""""""""""" {{{
+function! s:QuickfixExMap(cmd)
+  let nrs = map(getqflist(), "v:val.bufnr")
+  let nrs = uniq(sort(nrs))
+  let oldbuf = bufnr()
+  for nr in nrs
+    exe "keepjumps b " . nr
+    let v:errmsg = ""
+    silent! exe a:cmd
+    if !empty(v:errmsg)
+      echom "Error in: " . bufname(nr)
+      echom v:errmsg
+      break
+    endif
+  endfor
+  exe "b " . oldbuf
+endfunction
+
+command! -nargs=+ Cfdo call s:QuickfixExMap(<q-args>)
+""""""""""""""""""""""""""""""""""""""Cfdo""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""ToggleQf""""""""""""""""""""""""""""""""""""""" {{{
 function! s:ToggleQf()

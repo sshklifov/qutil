@@ -32,7 +32,7 @@ function! DisplayInQf(files, title)
     echo "No entries"
     return
   endif
-  if type(a:files[0]) == type(#{})
+  if type(a:files[0]) == v:t_dict
     let items = a:files
   else
     let items = map(a:files, "#{filename: v:val}")
@@ -46,9 +46,20 @@ function ArgFilter(list, args)
   return filter(a:list, "stridx(v:val, a:args) >= 0")
 endfunction
 
-function! SplitItems(list, args)
+function! SplitItems(items, args)
+  if len(a:items) > 0 && type(a:items[0]) == v:t_dict
+    if has_key(a:items[0], "bufnr")
+      let nrs = map(copy(a:items), "v:val.bufnr")
+      let items = map(nrs, 'expand("#" . v:val . ":p")')
+    else
+      let items = map(copy(a:items), "v:val.filename")
+    endif
+  else
+    let items = a:items
+  endif
+
   let compl = []
-  for item in a:list
+  for item in items
     let fullname = fnamemodify(item, ':p')
     let parts = split(fullname, "/")
     for part in parts

@@ -328,9 +328,27 @@ function! Make(...)
           let lnum = m[2]
           let col = m[3]
           let text = m[4]
-          if filereadable(file) && (stridx(text, "error:") >= 0 || stridx(text, "warning:") >= 0)
-            let item = #{filename: file, text: text, lnum: lnum, col: col}
-            call add(g:make_error_list, item)
+          if filereadable(file)
+            let types = ["error:", "warning:"]
+            let matched_types = filter(types, "stridx(text, v:val) >= 0")
+            if !empty(matched_types)
+              let item = #{filename: file, text: text, lnum: lnum, col: col}
+              call add(g:make_error_list, item)
+            endif
+          endif
+        endif
+        let m = matchlist(text, '\(.*\):\([0-9]\+\): \(.*\)')
+        if len(m) >= 4
+          let file = m[1]
+          let lnum = m[2]
+          let text = m[3]
+          if filereadable(file)
+            let types = ["undefined reference"]
+            let matched_types = filter(types, "stridx(text, v:val) >= 0")
+            if !empty(matched_types)
+              let item = #{filename: file, text: text, lnum: lnum}
+              call add(g:make_error_list, item)
+            endif
           endif
         endif
       endif

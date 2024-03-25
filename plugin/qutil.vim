@@ -358,7 +358,6 @@ function! Make(...)
   function! OnExit(id, code, event)
     if a:code == 0
       echom "Make successful!"
-      exe "LspRestart"
     else
       echom "Make failed!"
       if exists("g:make_error_list") && len(g:make_error_list) > 0

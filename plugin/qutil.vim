@@ -306,7 +306,7 @@ endfunction
 
 """"""""""""""""""""""""""""""""""""""Make""""""""""""""""""""""""""""""""""""""" {{{
 function! Make(...)
-  function! OnStdout(id, data, event)
+  function! s:OnStdout(id, data, event)
     for data in a:data
       let text = substitute(data, '\n', '', 'g')
       if len(text) > 0
@@ -318,7 +318,7 @@ function! Make(...)
     endfor
   endfunction
 
-  function! OnStderr(id, data, event)
+  function! s:OnStderr(id, data, event)
     for data in a:data
       let text = substitute(data, '\n', '', 'g')
       if len(text) > 0
@@ -355,9 +355,12 @@ function! Make(...)
     endfor
   endfunction
 
-  function! OnExit(id, code, event)
+  function! s:OnExit(id, code, event)
     if a:code == 0
       echom "Make successful!"
+      if exists('#User#MakeSuccessful')
+        doauto <nomodeline> User MakeSuccessful
+      endif
     else
       echom "Make failed!"
       if exists("g:make_error_list") && len(g:make_error_list) > 0
@@ -373,11 +376,11 @@ function! Make(...)
   let bang = get(a:, 2, "")
   if bang == ""
     let g:make_error_list = []
-    let opts = #{cwd: FugitiveWorkTree(), on_stdout: funcref("OnStdout"), on_stderr: funcref("OnStderr"), on_exit: funcref("OnExit")}
+    let opts = #{cwd: FugitiveWorkTree(), on_stdout: funcref("s:OnStdout"), on_stderr: funcref("s:OnStderr"), on_exit: funcref("s:OnExit")}
     return jobstart(command, opts)
   else
     bot new
-    let id = termopen(command, #{cwd: FugitiveWorkTree(), on_exit: funcref("OnExit")})
+    let id = termopen(command, #{cwd: FugitiveWorkTree(), on_exit: funcref("s:OnExit")})
     call cursor("$", 1)
     return id
   endif

@@ -73,10 +73,14 @@ function! SplitItems(items, args)
   return filter(res, "index(exclude, v:val) < 0")
 endfunction
 
-function! TailItems(list, args)
+function! UnorderedTailItems(list, args)
   let items = map(a:list, 'fnamemodify(v:val, ":t")')
   let items = filter(items, 'stridx(v:val, a:args) >= 0')
-  return uniq(sort(items))
+  return items
+endfunction
+
+function! TailItems(list, args)
+  return UnorderedTailItems(a:list, a:args)->sort()->uniq()
 endfunction
 
 function! s:IsQfOpen()
@@ -101,7 +105,7 @@ function! OldCompl(ArgLead, CmdLine, CursorPos)
   if a:CursorPos < len(a:CmdLine)
     return []
   endif
-  return s:GetOldFiles()->TailItems(a:ArgLead)
+  return s:GetOldFiles()->UnorderedTailItems(a:ArgLead)
 endfunction
 
 command -nargs=? -complete=customlist,OldCompl Old call s:GetOldFiles()->ArgFilter(<q-args>)->DropInQf("Old")
@@ -306,6 +310,10 @@ endfunction
 
 """"""""""""""""""""""""""""""""""""""Make""""""""""""""""""""""""""""""""""""""" {{{
 function! Make(...)
+  if has_key(g:statusline_dict, "make") && !empty(g:statusline_dict['make'])
+    return -1
+  endif
+
   function! s:OnStdout(id, data, event)
     for data in a:data
       let text = substitute(data, '\n', '', 'g')

@@ -16,9 +16,9 @@ function! DropInQf(files, title)
   endif
 
   if len(items) == 1
-    if has_key(items[0], 'bufnr')
+    if has_key(items[0], 'bufnr') && bufnr() != items[0].buffnr
       exe "buffer " . items[0].buffnr
-    else
+    elseif has_key(items[0], 'filename') && bufnr() != bufnr(items[0].filename)
       exe "edit " . items[0].filename
     endif
   else

@@ -83,19 +83,6 @@ function! TailItems(list, args)
   return UnorderedTailItems(a:list, a:args)->sort()->uniq()
 endfunction
 
-function! s:IsQfOpen()
-  let tabnr = tabpagenr()
-  let wins = filter(getwininfo(), {_, w -> w['tabnr'] == tabnr && w['quickfix'] == 1 && w['loclist'] == 0})
-  return !empty(wins)
-endfunction
-
-function! s:IsBufferQf()
-  let tabnr = tabpagenr()
-  let bufnr = bufnr()
-  let wins = filter(getwininfo(), {_, w -> w['tabnr'] == tabnr && w['quickfix'] == 1 && w['bufnr'] == bufnr})
-  return !empty(wins)
-endfunction
-
 """"""""""""""""""""""""""""""""""""""Old""""""""""""""""""""""""""""""""""""""" {{{
 function! s:GetOldFiles()
   return filter(deepcopy(v:oldfiles), "filereadable(v:val)")
@@ -149,7 +136,7 @@ function! s:OpenJumpList()
 endfunction
 
 function! s:Jump(scope)
-  if s:IsBufferQf()
+  if IsBufferQf()
     if a:scope == "i"
       try
         silent cnew
@@ -174,7 +161,7 @@ function! s:Jump(scope)
   endif
 
   " Refresh jump list
-  if s:IsQfOpen()
+  if IsQfOpen()
     let title = getqflist({'title': 1})['title']
     if title == "Jump"
       call s:OpenJumpList()
@@ -260,17 +247,21 @@ endfunction
 command! -nargs=+ Cfdo call s:QuickfixExMap(<q-args>)
 """"""""""""""""""""""""""""""""""""""Cfdo""""""""""""""""""""""""""""""""""""""" }}}
 
-""""""""""""""""""""""""""""""""""""""ToggleQf""""""""""""""""""""""""""""""""""""""" {{{
-function! s:ToggleQf()
-  if s:IsQfOpen()
-    cclose
-  else
-    copen
-  endif
+""""""""""""""""""""""""""""""""""""""IsQfOpen""""""""""""""""""""""""""""""""""""""" {{{
+function! IsQfOpen()
+  let tabnr = tabpagenr()
+  let wins = filter(getwininfo(), {_, w -> w['tabnr'] == tabnr && w['quickfix'] == 1 && w['loclist'] == 0})
+  return !empty(wins)
 endfunction
 
-nnoremap <silent> <leader>cc :call <SID>ToggleQf()<CR>
-""""""""""""""""""""""""""""""""""""""ToggleQf""""""""""""""""""""""""""""""""""""""" }}}
+function! IsBufferQf()
+  let tabnr = tabpagenr()
+  let bufnr = bufnr()
+  let wins = filter(getwininfo(), {_, w -> w['tabnr'] == tabnr && w['quickfix'] == 1 && w['bufnr'] == bufnr})
+  return !empty(wins)
+endfunction
+
+""""""""""""""""""""""""""""""""""""""IsQfOpen""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Repos""""""""""""""""""""""""""""""""""""""" {{{
 function! s:GetRepos()

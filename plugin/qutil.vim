@@ -4,6 +4,20 @@ if exists(':Old')
   finish
 endif
 
+""""""""""""""""""""""""""""""""""""""Functions""""""""""""""""""""""""""""""""""""""" {{{
+function! IsQfOpen()
+  let tabnr = tabpagenr()
+  let wins = filter(getwininfo(), {_, w -> w['tabnr'] == tabnr && w['quickfix'] == 1 && w['loclist'] == 0})
+  return !empty(wins)
+endfunction
+
+function! IsBufferQf()
+  let tabnr = tabpagenr()
+  let bufnr = bufnr()
+  let wins = filter(getwininfo(), {_, w -> w['tabnr'] == tabnr && w['quickfix'] == 1 && w['bufnr'] == bufnr})
+  return !empty(wins)
+endfunction
+
 function! DropInQf(files, title)
   if len(a:files) <= 0
     echo "No entries"
@@ -82,6 +96,7 @@ endfunction
 function! TailItems(list, args)
   return UnorderedTailItems(a:list, a:args)->sort()->uniq()
 endfunction
+""""""""""""""""""""""""""""""""""""""Functions""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Old""""""""""""""""""""""""""""""""""""""" {{{
 function! s:GetOldFiles()
@@ -246,22 +261,6 @@ endfunction
 
 command! -nargs=+ Cfdo call s:QuickfixExMap(<q-args>)
 """"""""""""""""""""""""""""""""""""""Cfdo""""""""""""""""""""""""""""""""""""""" }}}
-
-""""""""""""""""""""""""""""""""""""""IsQfOpen""""""""""""""""""""""""""""""""""""""" {{{
-function! IsQfOpen()
-  let tabnr = tabpagenr()
-  let wins = filter(getwininfo(), {_, w -> w['tabnr'] == tabnr && w['quickfix'] == 1 && w['loclist'] == 0})
-  return !empty(wins)
-endfunction
-
-function! IsBufferQf()
-  let tabnr = tabpagenr()
-  let bufnr = bufnr()
-  let wins = filter(getwininfo(), {_, w -> w['tabnr'] == tabnr && w['quickfix'] == 1 && w['bufnr'] == bufnr})
-  return !empty(wins)
-endfunction
-
-""""""""""""""""""""""""""""""""""""""IsQfOpen""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Repos""""""""""""""""""""""""""""""""""""""" {{{
 function! s:GetRepos()

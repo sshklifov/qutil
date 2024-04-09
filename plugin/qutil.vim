@@ -263,7 +263,7 @@ command! -nargs=+ Cfdo call s:QuickfixExMap(<q-args>)
 """"""""""""""""""""""""""""""""""""""Cfdo""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Repos""""""""""""""""""""""""""""""""""""""" {{{
-function! s:GetRepos()
+function! GetRepos()
   let old = filter(deepcopy(v:oldfiles), "filereadable(v:val) || isdirectory(v:val)")
   let git = filter(map(old,  "FugitiveExtractGitDir(v:val)"), "!empty(v:val)")
   let repos = map(git, "fnamemodify(v:val, ':h')")
@@ -274,10 +274,10 @@ function! ReposCompl(ArgLead, CmdLine, CursorPos)
   if a:CursorPos < len(a:CmdLine)
     return []
   endif
-  return s:GetRepos()->TailItems(a:ArgLead)
+  return GetRepos()->TailItems(a:ArgLead)
 endfunction
 
-command! -nargs=? -complete=customlist,ReposCompl Repos call s:GetRepos()->ArgFilter(<q-args>)->DropInQf("Repos")
+command! -nargs=? -complete=customlist,ReposCompl Repos call GetRepos()->ArgFilter(<q-args>)->DropInQf("Repos")
 """"""""""""""""""""""""""""""""""""""Repos""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""CmdCompl""""""""""""""""""""""""""""""""""""""" {{{

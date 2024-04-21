@@ -96,6 +96,18 @@ endfunction
 function! TailItems(list, args)
   return UnorderedTailItems(a:list, a:args)->sort()->uniq()
 endfunction
+
+function! LinePreview(list)
+  for item in a:list
+    if has_key(item, 'bufnr')
+      let text = getbufline(item.bufnr, item.lnum)
+      if !empty(text)
+        let item['text'] = text[0]
+      endif
+    endif
+  endfor
+  return a:list
+endfunction
 """"""""""""""""""""""""""""""""""""""Functions""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Old""""""""""""""""""""""""""""""""""""""" {{{
@@ -189,6 +201,16 @@ nnoremap <silent> <c-i> :call <SID>Jump("i")<CR>
 nnoremap <silent> <c-o> :call <SID>Jump("o")<CR>
 """"""""""""""""""""""""""""""""""""""JumpList""""""""""""""""""""""""""""""""""""""" }}}
 
+""""""""""""""""""""""""""""""""""""""ChangeList""""""""""""""""""""""""""""""""""""""" {{{
+function s:GetChangeList()
+  let list = reverse(getchangelist()[0])
+  return map(list, "#{col: v:val.col, lnum: v:val.lnum, bufnr: bufnr()}")
+endfunction
+
+nnoremap <silent> <leader>ch <cmd>call <SID>GetChangeList()->LinePreview()->DisplayInQf("Change")<CR>
+
+""""""""""""""""""""""""""""""""""""""JumpList""""""""""""""""""""""""""""""""""""""" }}}
+
 """"""""""""""""""""""""""""""""""""""ShowBuffers""""""""""""""""""""""""""""""""""""""" {{{
 function! s:ShowBuffers(pat)
   function! GetBufferItem(pat, m, n) closure
@@ -263,11 +285,15 @@ command! -nargs=+ Cfdo call s:QuickfixExMap(<q-args>)
 """"""""""""""""""""""""""""""""""""""Cfdo""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Repos""""""""""""""""""""""""""""""""""""""" {{{
+" TODO slow as balls
 function! GetRepos()
-  let old = filter(deepcopy(v:oldfiles), "filereadable(v:val) || isdirectory(v:val)")
-  let git = filter(map(old,  "FugitiveExtractGitDir(v:val)"), "!empty(v:val)")
-  let repos = map(git, "fnamemodify(v:val, ':h')")
-  return uniq(sort(repos))
+  if !exists('s:repos')
+    let old = filter(deepcopy(v:oldfiles), "filereadable(v:val) || isdirectory(v:val)")
+    let git = filter(map(old,  "FugitiveExtractGitDir(v:val)"), "!empty(v:val)")
+    let repos = map(git, "fnamemodify(v:val, ':h')")
+    let s:repos = uniq(sort(repos))
+  endif
+  return copy(s:repos)
 endfunction
 
 function! ReposCompl(ArgLead, CmdLine, CursorPos)

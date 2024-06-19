@@ -387,10 +387,10 @@ function! Make(...)
       endif
     else
       echom "Make failed!"
-      if exists("g:make_error_list") && len(g:make_error_list) > 0
-        call setqflist([], ' ', #{title: "Make", items: g:make_error_list})
-        copen
-      endif
+    endif
+    if exists("g:make_error_list") && len(g:make_error_list) > 0
+      call setqflist([], ' ', #{title: "Make", items: g:make_error_list})
+      copen
     endif
     silent! unlet g:make_error_list
     let g:statusline_dict['make'] = ''

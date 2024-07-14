@@ -285,25 +285,25 @@ command! -nargs=+ Cfdo call s:QuickfixExMap(<q-args>)
 """"""""""""""""""""""""""""""""""""""Cfdo""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Repos""""""""""""""""""""""""""""""""""""""" {{{
-" TODO slow as balls
-function! GetRepos()
-  if !exists('s:repos')
+function! GetRepos(force)
+  if a:force || !exists('g:PLUGIN_QUTIL_REPOS')
     let old = filter(deepcopy(v:oldfiles), "filereadable(v:val) || isdirectory(v:val)")
     let git = filter(map(old,  "FugitiveExtractGitDir(v:val)"), "!empty(v:val)")
     let repos = map(git, "fnamemodify(v:val, ':h')")
-    let s:repos = uniq(sort(repos))
+    let g:PLUGIN_QUTIL_REPOS = uniq(sort(repos))
   endif
-  return copy(s:repos)
+  return copy(g:PLUGIN_QUTIL_REPOS)
 endfunction
 
 function! ReposCompl(ArgLead, CmdLine, CursorPos)
   if a:CursorPos < len(a:CmdLine)
     return []
   endif
-  return GetRepos()->TailItems(a:ArgLead)
+  return GetRepos(v:false)->TailItems(a:ArgLead)
 endfunction
 
-command! -nargs=? -complete=customlist,ReposCompl Repos call GetRepos()->ArgFilter(<q-args>)->DropInQf("Repos")
+command! -bang -nargs=? -complete=customlist,ReposCompl Repos
+      \ call GetRepos(<bang>v:false)->ArgFilter(<q-args>)->DropInQf("Repos")
 """"""""""""""""""""""""""""""""""""""Repos""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""CmdCompl""""""""""""""""""""""""""""""""""""""" {{{

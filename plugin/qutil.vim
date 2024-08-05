@@ -56,8 +56,15 @@ function! DisplayInQf(files, title)
   copen
 endfunction
 
-function ArgFilter(list, args)
-  return filter(a:list, "stridx(v:val, a:args) >= 0")
+function FileFilter(list, str)
+  let items = filter(copy(a:list), "stridx(v:val, a:str) >= 0")
+  " If an exact match is found, return it directly
+  let basenames = map(copy(items), 'fnamemodify(v:val, ":t")')
+  let pos = index(basenames, a:str)
+  if pos >= 0
+    return [items[pos]]
+  else
+    return items
 endfunction
 
 function! SplitItems(items, args)
@@ -122,7 +129,7 @@ function! OldCompl(ArgLead, CmdLine, CursorPos)
   return s:GetOldFiles()->UnorderedTailItems(a:ArgLead)
 endfunction
 
-command -nargs=? -complete=customlist,OldCompl Old call s:GetOldFiles()->ArgFilter(<q-args>)->DropInQf("Old")
+command -nargs=? -complete=customlist,OldCompl Old call s:GetOldFiles()->FileFilter(<q-args>)->DropInQf("Old")
 """"""""""""""""""""""""""""""""""""""Old""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Cdelete""""""""""""""""""""""""""""""""""""""" {{{
@@ -249,7 +256,7 @@ function! BufferCompl(ArgLead, CmdLine, CursorPos)
   return s:GetBuffers()->SplitItems(a:ArgLead)
 endfunction
 
-command! -nargs=? -complete=customlist,BufferCompl Buffer call s:GetBuffers()->ArgFilter(<q-args>)->DropInQf("Buffer")
+command! -nargs=? -complete=customlist,BufferCompl Buffer call s:GetBuffers()->FileFilter(<q-args>)->DropInQf("Buffer")
 """"""""""""""""""""""""""""""""""""""Buffer""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Modified""""""""""""""""""""""""""""""""""""""" {{{
@@ -303,7 +310,7 @@ function! ReposCompl(ArgLead, CmdLine, CursorPos)
 endfunction
 
 command! -bang -nargs=? -complete=customlist,ReposCompl Repos
-      \ call GetRepos(<bang>v:false)->ArgFilter(<q-args>)->DropInQf("Repos")
+      \ call GetRepos(<bang>v:false)->FileFilter(<q-args>)->DropInQf("Repos")
 """"""""""""""""""""""""""""""""""""""Repos""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""CmdCompl""""""""""""""""""""""""""""""""""""""" {{{

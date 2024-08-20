@@ -270,6 +270,20 @@ endfunction
 command! -nargs=0 Modified call s:GetModified()->DisplayInQf("Modified")
 """"""""""""""""""""""""""""""""""""""Modified""""""""""""""""""""""""""""""""""""""" }}}
 
+""""""""""""""""""""""""""""""""""""""Unique""""""""""""""""""""""""""""""""""""""" {{{
+function! s:UniqueQuickfix()
+  let qf = copy(getqflist())
+  call map(qf, {key, value -> #{key: key, value: value}})
+  let Cmp = {a, b, -> a.value['bufnr'] - b.value['bufnr']}
+  call uniq(sort(qf, Cmp), Cmp)
+  call sort(qf, {a, b -> a.key - b.key})
+  call map(qf, 'v:val.value')
+  call setqflist([], ' ', #{title: "Unique", items: qf})
+endfunction
+
+command! -nargs=0 Unique call s:UniqueQuickfix() 
+""""""""""""""""""""""""""""""""""""""Unique""""""""""""""""""""""""""""""""""""""" }}}
+
 """"""""""""""""""""""""""""""""""""""Cfdo""""""""""""""""""""""""""""""""""""""" {{{
 function! s:QuickfixExMap(cmd)
   let nrs = map(getqflist(), "v:val.bufnr")

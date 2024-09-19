@@ -21,7 +21,7 @@ endfunction
 function! DropInQf(files, title)
   if len(a:files) <= 0
     echo "No entries"
-    return
+    return v:false
   endif
   if type(a:files[0]) == type(#{})
     let items = a:files
@@ -39,12 +39,13 @@ function! DropInQf(files, title)
     call setqflist([], ' ', #{title: a:title, items: items})
     copen
   endif
+  return v:true
 endfunction
 
-function! DisplayInQf(files, title)
+function! s:SetQf(files, title)
   if len(a:files) <= 0
     echo "No entries"
-    return
+    return v:false
   endif
   if type(a:files[0]) == v:t_dict
     let items = a:files
@@ -53,7 +54,23 @@ function! DisplayInQf(files, title)
   endif
 
   call setqflist([], ' ', #{title: a:title, items: items})
-  copen
+  return v:true
+endfunction
+
+function! DisplayInQf(files, title)
+  if s:SetQf(a:files, a:title)
+    copen
+    return v:true
+  endif
+  return v:false
+endfunction
+
+function! LoadInQf(files, title)
+  if s:SetQf(a:files, a:title)
+    cc 1
+    return v:true
+  endif
+  return v:false
 endfunction
 
 function FileFilter(list, str)
@@ -214,7 +231,7 @@ function s:GetChangeList()
   return map(list, "#{col: v:val.col, lnum: v:val.lnum, bufnr: bufnr()}")
 endfunction
 
-nnoremap <silent> <leader>ch <cmd>call <SID>GetChangeList()->LinePreview()->DisplayInQf("Change")<CR>
+nnoremap <silent> <leader>ch <cmd>call <SID>GetChangeList()->LinePreview()->LoadInQf("Change")<CR>
 
 """"""""""""""""""""""""""""""""""""""JumpList""""""""""""""""""""""""""""""""""""""" }}}
 

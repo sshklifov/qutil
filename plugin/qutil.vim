@@ -270,7 +270,7 @@ function! BufferCompl(ArgLead, CmdLine, CursorPos)
   if a:CursorPos < len(a:CmdLine)
     return []
   endif
-  return s:GetBuffers()->SplitItems(a:ArgLead)
+  return s:GetBuffers()->TailItems(a:ArgLead)
 endfunction
 
 command! -nargs=? -complete=customlist,BufferCompl Buffer call s:GetBuffers()->FileFilter(<q-args>)->DropInQf("Buffer")
@@ -424,7 +424,7 @@ function! Make(...)
         doauto <nomodeline> User MakeSuccessful
       endif
     else
-      echom "Make failed!"
+      call nvim_echo([["Make failed!", "ErrorMsg"]], v:true, #{})
     endif
     if exists("g:make_error_list") && len(g:make_error_list) > 0
       call setqflist([], ' ', #{title: "Make", items: g:make_error_list})

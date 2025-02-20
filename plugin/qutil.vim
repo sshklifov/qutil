@@ -30,10 +30,16 @@ function! DropInQf(files, title)
   endif
 
   if len(items) == 1
-    if has_key(items[0], 'bufnr') && bufnr() != items[0].buffnr
-      exe "buffer " . items[0].buffnr
+    if has_key(items[0], 'bufnr') && bufnr() != items[0].bufnr
+      exe "buffer " . items[0].bufnr
     elseif has_key(items[0], 'filename') && bufnr() != bufnr(items[0].filename)
       exe "edit " . items[0].filename
+    endif
+    if has_key(items[0], 'lnum')
+      exe items[0].lnum
+    endif
+    if has_key(items[0], 'col')
+      exe printf("normal %d|", items[0].col)
     endif
   else
     call setqflist([], ' ', #{title: a:title, items: items})

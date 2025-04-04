@@ -124,7 +124,13 @@ function! UnorderedTailItems(list, args)
 endfunction
 
 function! TailItems(list, args)
-  return UnorderedTailItems(a:list, a:args)->sort()->uniq()
+  let items = map(a:list, 'fnamemodify(v:val, ":t")')
+  let items = map(items, '[stridx(v:val, a:args), v:val]')
+  call filter(items, 'v:val[0] >= 0')
+  call sort(items)
+  let items = map(items, 'v:val[1]')
+  call uniq(items)
+  return items
 endfunction
 
 function! LinePreview(list)

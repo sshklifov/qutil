@@ -272,22 +272,6 @@ endfunction
 nnoremap <silent> <leader>buf :call <SID>ShowBuffers("")<CR>
 """"""""""""""""""""""""""""""""""""""ShowBuffers""""""""""""""""""""""""""""""""""""""" }}}
 
-""""""""""""""""""""""""""""""""""""""Buffer""""""""""""""""""""""""""""""""""""""" {{{
-function! s:GetBuffers()
-  let names = map(range(1, bufnr('$')), "bufname(v:val)")
-  return filter(names, "filereadable(v:val)")
-endfunction
-
-function! BufferCompl(ArgLead, CmdLine, CursorPos)
-  if a:CursorPos < len(a:CmdLine)
-    return []
-  endif
-  return s:GetBuffers()->TailItems(a:ArgLead)
-endfunction
-
-command! -nargs=? -complete=customlist,BufferCompl Buffer call s:GetBuffers()->FileFilter(<q-args>)->DropInQf("Buffer")
-""""""""""""""""""""""""""""""""""""""Buffer""""""""""""""""""""""""""""""""""""""" }}}
-
 """"""""""""""""""""""""""""""""""""""Modified""""""""""""""""""""""""""""""""""""""" {{{
 function! s:GetModified()
   let infos = filter(getbufinfo(), "v:val.changed")
@@ -296,7 +280,7 @@ function! s:GetModified()
   return filter(names, "filereadable(v:val)")
 endfunction
 
-command! -nargs=0 Modified call s:GetModified()->DisplayInQf("Modified")
+command! -nargs=0 Modified call s:GetModified()->DropInQf("Modified")
 """"""""""""""""""""""""""""""""""""""Modified""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Unique""""""""""""""""""""""""""""""""""""""" {{{

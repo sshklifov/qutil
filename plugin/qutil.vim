@@ -147,18 +147,26 @@ endfunction
 """"""""""""""""""""""""""""""""""""""Functions""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Old""""""""""""""""""""""""""""""""""""""" {{{
-function! s:GetOldFiles()
-  return filter(deepcopy(v:oldfiles), "filereadable(v:val)")
+function! s:GetOldFiles(bang)
+  let files = filter(deepcopy(v:oldfiles), "filereadable(v:val)")
+  if !empty(a:bang)
+    let dir = getcwd()
+    let ncmp = len(dir) - 1
+    call filter(files, 'v:val[:ncmp] == dir')
+  endif
+  return files
 endfunction
 
 function! OldCompl(ArgLead, CmdLine, CursorPos)
   if a:CursorPos < len(a:CmdLine)
     return []
   endif
-  return s:GetOldFiles()->UnorderedTailItems(a:ArgLead)
+  let idx = stridx(a:CmdLine, "!")
+  let bang = idx > 0 && idx <= 3 ? "!" : ""
+  return s:GetOldFiles(bang)->UnorderedTailItems(a:ArgLead)
 endfunction
 
-command -nargs=? -complete=customlist,OldCompl Old call s:GetOldFiles()->FileFilter(<q-args>)->DropInQf("Old")
+command -nargs=? -bang -complete=customlist,OldCompl Old call s:GetOldFiles("<bang>")->FileFilter(<q-args>)->DropInQf("Old")
 """"""""""""""""""""""""""""""""""""""Old""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Cdelete""""""""""""""""""""""""""""""""""""""" {{{
@@ -431,6 +439,9 @@ function! Make(...)
   endfunction
 
   let command = get(a:, 1, "")
+  if empty(command)
+    return
+  endif
   let bang = get(a:, 2, "")
   if bang == ""
     let g:make_error_list = []

@@ -327,14 +327,47 @@ command! -nargs=+ Cfdo call s:QuickfixExMap(<q-args>)
 """"""""""""""""""""""""""""""""""""""Cfdo""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Repos""""""""""""""""""""""""""""""""""""""" {{{
-function! GetRepos()
-  if !exists('g:PLUGIN_QUTIL_REPOS')
-    let old = filter(deepcopy(v:oldfiles), "filereadable(v:val) || isdirectory(v:val)")
-    let git = filter(map(old,  "FugitiveExtractGitDir(v:val)"), "!empty(v:val)")
-    let repos = map(git, "fnamemodify(v:val, ':h')")
-    let g:PLUGIN_QUTIL_REPOS = uniq(sort(repos))
+function! s:IsGitDir(dir)
+  if a:dir[-1:-1] == '/'
+    let git_dir = a:dir[:-2]
+  else
+    let git_dir = a:dir
   endif
-  return copy(g:PLUGIN_QUTIL_REPOS)
+  let git_dir ..= "/.git"
+  return isdirectory(git_dir)
+endfunction
+
+function! s:CacheRepos()
+  " Sanity check
+  if !empty($GIT_CEILING_DIRECTORIES) || !empty($GIT_WORK_TREE) || !empty($GIT_DIR)
+    call init#Warn("Git environment variables detected (not supported)!")
+    let s:repos = []
+    return
+  endif
+
+  let memo = {}
+  let old = filter(deepcopy(v:oldfiles), "filereadable(v:val)")
+  for file in old
+    let old_subdir = file
+    let subdir = fnamemodify(old_subdir, ":h")
+    while subdir != old_subdir
+      if !has_key(memo, subdir)
+        let memo[subdir] = s:IsGitDir(subdir)
+      else
+        break
+      endif
+      let old_subdir = subdir
+      let subdir = fnamemodify(subdir, ":h")
+    endwhile
+  endfor
+  let s:repos = keys(filter(memo, 'v:val'))
+endfunction
+
+function! GetRepos()
+  if !exists('s:repos')
+    call s:CacheRepos()
+  endif
+  return copy(s:repos)
 endfunction
 
 function! ReposCompl(ArgLead, CmdLine, CursorPos)

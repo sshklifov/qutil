@@ -5,17 +5,34 @@ if exists(':Old')
 endif
 
 """"""""""""""""""""""""""""""""""""""Functions""""""""""""""""""""""""""""""""""""""" {{{
-function! IsQfOpen()
-  let tabnr = tabpagenr()
-  let wins = filter(getwininfo(), {_, w -> w['tabnr'] == tabnr && w['quickfix'] == 1 && w['loclist'] == 0})
-  return !empty(wins)
+function! s:IsQuickfix(w)
+  if a:w['tabnr'] != tabpagenr()
+    return v:false
+  endif
+  if a:w['loclist']
+    return v:false
+  endif
+  
+  if a:w['quickfix']
+    return v:true
+  endif
+  let bufnr = winbufnr(a:w['winid'])
+  return getbufvar(bufnr, 'custom_quickfix', v:null)
 endfunction
 
-function! IsBufferQf()
+function! qutil#GetQuickfix()
   let tabnr = tabpagenr()
-  let bufnr = bufnr()
-  let wins = filter(getwininfo(), {_, w -> w['tabnr'] == tabnr && w['quickfix'] == 1 && w['bufnr'] == bufnr})
-  return !empty(wins)
+  let wininfos = filter(getwininfo(), {k, v -> s:IsQuickfix(v)})
+  return map(wininfos, 'v:val.winid')
+endfunction
+
+function! qutil#IsQuickfixOpen()
+  return empty(qutil#GetQuickfix())
+endfunction
+
+function! qutil#IsQuickfix()
+  let matches = qutil#GetQuickfix()
+  return !empty(filter(matches, 'v:val == win_getid()'))
 endfunction
 
 function! DropInQf(files, title)
@@ -207,7 +224,7 @@ function! s:OpenJumpList()
 endfunction
 
 function! s:Jump(scope)
-  if IsBufferQf()
+  if qutil#IsQuickfix()
     if a:scope == "i"
       try
         silent cnew
@@ -232,7 +249,7 @@ function! s:Jump(scope)
   endif
 
   " Refresh jump list
-  if IsQfOpen()
+  if qutil#IsQuickfixOpen()
     let title = getqflist({'title': 1})['title']
     if title == "Jump"
       call s:OpenJumpList()
@@ -329,6 +346,7 @@ command! -nargs=+ Cfdo call s:QuickfixExMap(<q-args>)
 """"""""""""""""""""""""""""""""""""""Repos""""""""""""""""""""""""""""""""""""""" {{{
 function! s:IsGitDir(dir)
   if a:dir[-1:-1] == '/'
+    " Unlikely branch
     let git_dir = a:dir[:-2]
   else
     let git_dir = a:dir

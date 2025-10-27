@@ -5,7 +5,7 @@ if exists(':Old')
 endif
 
 """"""""""""""""""""""""""""""""""""""Functions""""""""""""""""""""""""""""""""""""""" {{{
-function! s:IsQuickfix(w)
+function! s:IsQuickfix(_, w)
   if a:w['tabnr'] != tabpagenr()
     return v:false
   endif
@@ -21,13 +21,12 @@ function! s:IsQuickfix(w)
 endfunction
 
 function! qutil#GetQuickfix()
-  let tabnr = tabpagenr()
-  let wininfos = filter(getwininfo(), {k, v -> s:IsQuickfix(v)})
+  let wininfos = filter(getwininfo(), function('s:IsQuickfix'))
   return map(wininfos, 'v:val.winid')
 endfunction
 
 function! qutil#IsQuickfixOpen()
-  return empty(qutil#GetQuickfix())
+  return !empty(qutil#GetQuickfix())
 endfunction
 
 function! qutil#IsQuickfix()
@@ -35,122 +34,97 @@ function! qutil#IsQuickfix()
   return !empty(filter(matches, 'v:val == win_getid()'))
 endfunction
 
-function! DropInQf(files, title)
-  if len(a:files) <= 0
-    echo "No entries"
-    return v:false
-  endif
-  if type(a:files[0]) == type(#{})
-    let items = a:files
-  else
-    let items = map(a:files, "#{filename: v:val}")
-  endif
+function! qutil#CloseQuickfix()
+  for winid in qutil#GetQuickfix()
+    call nvim_win_close(winid, v:false)
+  endfor
+endfunction
 
-  if len(items) == 1
-    if has_key(items[0], 'bufnr') && bufnr() != items[0].bufnr
-      exe "buffer " . items[0].bufnr
-    elseif has_key(items[0], 'filename') && bufnr() != bufnr(items[0].filename)
-      exe "edit " . items[0].filename
+function! qutil#SetQuickfix(items, title, ...)
+  if len(a:items) <= 0
+    echo "No entries"
+    return
+  endif
+  if type(a:items[0]) == type(#{})
+    let items = a:items
+  else
+    let items = map(a:items, "#{filename: v:val}")
+  endif
+  " Close special quickfix windows
+  call qutil#CloseQuickfix()
+
+  let opts = get(a:000, 0, #{})
+  if has_key(opts, 'oneshot') && len(items) == 1
+    let item = items[0]
+    if has_key(item, 'bufnr') && bufnr() != item.bufnr
+      exe "buffer " . item.bufnr
+    elseif has_key(item, 'filename') && bufnr() != bufnr(item.filename)
+      exe "edit " . item.filename
     endif
-    if has_key(items[0], 'lnum')
-      exe items[0].lnum
+    if has_key(item, 'lnum')
+      exe item.lnum
     endif
-    if has_key(items[0], 'col')
-      exe printf("normal %d|", items[0].col)
+    if has_key(item, 'col')
+      exe printf("normal %d|", item.col)
     endif
   else
     call setqflist([], ' ', #{title: a:title, items: items})
-    copen
-  endif
-  return v:true
-endfunction
-
-function! s:SetQf(files, title)
-  if len(a:files) <= 0
-    echo "No entries"
-    return v:false
-  endif
-  if type(a:files[0]) == v:t_dict
-    let items = a:files
-  else
-    let items = map(a:files, "#{filename: v:val}")
-  endif
-
-  call setqflist([], ' ', #{title: a:title, items: items})
-  return v:true
-endfunction
-
-function! DisplayInQf(files, title)
-  if s:SetQf(a:files, a:title)
-    copen
-    return v:true
-  endif
-  return v:false
-endfunction
-
-function! LoadInQf(files, title)
-  if s:SetQf(a:files, a:title)
-    cc 1
-    return v:true
-  endif
-  return v:false
-endfunction
-
-function FileFilter(list, str)
-  let items = filter(copy(a:list), "stridx(v:val, a:str) >= 0")
-  " If an exact match is found, return it directly
-  let basenames = map(copy(items), 'fnamemodify(v:val, ":t")')
-  let pos = index(basenames, a:str)
-  if pos >= 0
-    return [items[pos]]
-  else
-    return items
-endfunction
-
-function! SplitItems(items, args)
-  if len(a:items) > 0 && type(a:items[0]) == v:t_dict
-    if has_key(a:items[0], "bufnr")
-      let nrs = map(copy(a:items), "v:val.bufnr")
-      let items = map(nrs, 'expand("#" . v:val . ":p")')
-    else
-      let items = map(copy(a:items), "v:val.filename")
+    if !has_key(opts, 'hide')
+      copen
     endif
-  else
-    let items = a:items
   endif
-
-  let compl = []
-  for item in items
-    let fullname = fnamemodify(item, ':p')
-    let parts = split(fullname, "/")
-    for part in parts
-      if stridx(part, a:args) >= 0
-        call add(compl, part)
-      endif
-    endfor
-  endfor
-  let res = uniq(sort(compl))
-  let exclude = ["home", $USER]
-  return filter(res, "index(exclude, v:val) < 0")
 endfunction
 
-function! UnorderedTailItems(list, args)
-  let items = map(a:list, 'fnamemodify(v:val, ":t")')
-  let items = filter(items, 'stridx(v:val, a:args) >= 0')
+function! qutil#DropInQuickfix(items, title)
+  return qutil#SetQuickfix(a:items, a:title, #{oneshot: v:true})
+endfunction
+
+function! qutil#LoadQuickfix(items, title)
+  return qutil#SetQuickfix(a:items, a:title, #{oneshot: v:true, hide: v:true})
+endfunction
+
+function! qutil#FileFilter(list, str, ...)
+  let opts = get(a:000, 0, #{})
+  let items = copy(a:list)
+
+  if has_key(opts, 'basename')
+    let items = map(items, 'fnamemodify(v:val, ":t")')
+  endif
+  if has_key(opts, 'component')
+    let items = map(items, split(fnamemodify(item, ':p'), "/"))
+    let exclude = ["home", $USER]
+    let items = filter(res, "index(exclude, v:val) < 0")
+    let items = uniq(sort(items))
+  endif
+  if has_key(opts, 'sort')
+    let items = map(a:list, '[stridx(v:val, a:str), v:val]')
+    call filter(items, 'v:val[0] >= 0')
+    call sort(items)
+    let items = map(items, 'v:val[1]')
+  else
+    let items = filter(items, "stridx(v:val, a:str) >= 0")
+  endif
+  if has_key(opts, 'oneshot')
+    if index(items, a:str) >= 0
+      let items = [a:str]
+    endif
+  endif
   return items
 endfunction
 
-function! TailItems(list, args)
-  let items = map(a:list, 'fnamemodify(v:val, ":t")')
-  let items = map(items, '[stridx(v:val, a:args), v:val]')
-  call filter(items, 'v:val[0] >= 0')
-  call sort(items)
-  let items = map(items, 'v:val[1]')
-  call uniq(items)
-  return items
+function! qutil#FileCompletionPass(list, arg)
+  return qutil#FileFilter(a:list, a:arg, #{basename: 1, sort: 1})
 endfunction
 
-function! LinePreview(list)
+function! qutil#ComponentCompletionPass(list, arg)
+  return qutil#FileFilter(a:list, a:arg, #{component: 1, sort: 1})
+endfunction
+
+function! qutil#CommandPass(list, arg)
+  return qutil#FileFilter(a:list, a:arg)
+endfunction
+
+function! qutil#AddLinePreview(list)
   for item in a:list
     if has_key(item, 'bufnr')
       let text = getbufline(item.bufnr, item.lnum)
@@ -174,22 +148,24 @@ function! s:GetOldFiles(bang)
   return files
 endfunction
 
-function! OldCompl(ArgLead, CmdLine, CursorPos)
+function! qutil#OldCompl(ArgLead, CmdLine, CursorPos)
   if a:CursorPos < len(a:CmdLine)
     return []
   endif
   let idx = stridx(a:CmdLine, "!")
   let bang = idx > 0 && idx <= 3 ? "!" : ""
-  return s:GetOldFiles(bang)->UnorderedTailItems(a:ArgLead)
+  return s:GetOldFiles(bang)->qutil#FileFilter(a:ArgLead, #{basename: 1})
 endfunction
 
-command -nargs=? -bang -complete=customlist,OldCompl Old call s:GetOldFiles("<bang>")->FileFilter(<q-args>)->DropInQf("Old")
+command -nargs=? -bang -complete=customlist,qutil#OldCompl Old call s:GetOldFiles("<bang>")->qutil#CommandPass(<q-args>)->qutil#DropInQuickfix("Old")
 """"""""""""""""""""""""""""""""""""""Old""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Cdelete""""""""""""""""""""""""""""""""""""""" {{{
 function! s:DeleteQfEntries(a, b)
+  let view = winsaveview()
   let qflist = filter(getqflist(), {i, _ -> i+1 < a:a || i+1 > a:b})
-  call setqflist([], ' ', {'title': 'Cdelete', 'items': qflist})
+  call qutil#SetQuickfix('Cdelete', qflist)
+  call winrestview(view)
 endfunction
 
 autocmd FileType qf command! -buffer -range Cdelete call <SID>DeleteQfEntries(<line1>, <line2>)
@@ -268,30 +244,28 @@ function s:GetChangeList()
   return map(list, "#{col: v:val.col, lnum: v:val.lnum, bufnr: bufnr()}")
 endfunction
 
-nnoremap <silent> <leader>ch <cmd>call <SID>GetChangeList()->LinePreview()->LoadInQf("Change")<CR>
+nnoremap <silent> <leader>ch <cmd>call <SID>GetChangeList()->qutil#AddLinePreview()->qutil#LoadQuickfix("Change")<CR>
 
 """"""""""""""""""""""""""""""""""""""JumpList""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""ShowBuffers""""""""""""""""""""""""""""""""""""""" {{{
 function! s:ShowBuffers(pat)
-  function! GetBufferItem(pat, m, n) closure
-    let name = expand('#' . a:n . ':p')
+  let items = []
+  for bufnr in range(1, bufnr('$'))
+    let name = expand('#' .. bufnr .. ':p')
     if !filereadable(name) || stridx(name, a:pat) < 0
-      return #{}
+      continue
     endif
 
-    let bufinfo = getbufinfo(a:n)[0]
+    let bufinfo = getbufinfo(bufnr)[0]
     let lnum = bufinfo["lnum"]
-    let text = string(a:n)
+    let text = string(bufnr)
     if bufinfo["changed"]
       let text = text . " (modified)"
     endif
-    return #{bufnr: a:n, text: text, lnum: lnum}
-  endfunction
-
-  let items = map(range(1, bufnr('$')), funcref("GetBufferItem", [a:pat]))
-  let items = filter(items, "!empty(v:val)")
-  call DropInQf(items, "Buffers")
+    call add(items, #{bufnr: a:n, text: text, lnum: lnum})
+  endfor
+  call qutil#DropInQuickfix(items, "Buffers")
 endfunction
 
 nnoremap <silent> <leader>buf :call <SID>ShowBuffers("")<CR>
@@ -305,7 +279,7 @@ function! s:GetModified()
   return filter(names, "filereadable(v:val)")
 endfunction
 
-command! -nargs=0 Modified call s:GetModified()->DropInQf("Modified")
+command! -nargs=0 Modified call s:GetModified()->qutil#DropInQuickfix("Modified")
 """"""""""""""""""""""""""""""""""""""Modified""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Unique""""""""""""""""""""""""""""""""""""""" {{{
@@ -316,7 +290,7 @@ function! s:UniqueQuickfix()
   call uniq(sort(qf, Cmp), Cmp)
   call sort(qf, {a, b -> a.key - b.key})
   call map(qf, 'v:val.value')
-  call setqflist([], ' ', #{title: "Unique", items: qf})
+  call qutil#SetQuickfix("Unique", qf)
 endfunction
 
 command! -nargs=0 Unique call s:UniqueQuickfix() 
@@ -381,26 +355,26 @@ function! s:CacheRepos()
   let s:repos = keys(filter(memo, 'v:val'))
 endfunction
 
-function! GetRepos()
+function! qutil#GetRepos()
   if !exists('s:repos')
     call s:CacheRepos()
   endif
   return copy(s:repos)
 endfunction
 
-function! ReposCompl(ArgLead, CmdLine, CursorPos)
+function! qutil#ReposCompl(ArgLead, CmdLine, CursorPos)
   if a:CursorPos < len(a:CmdLine)
     return []
   endif
-  return GetRepos()->TailItems(a:ArgLead)
+  return qutil#GetRepos()->qutil#FileCompletionPass(a:ArgLead)
 endfunction
 
-command! -bang -nargs=? -complete=customlist,ReposCompl Repos
-      \ call GetRepos()->FileFilter(<q-args>)->DropInQf("Repos")
+command! -bang -nargs=? -complete=customlist,qutil#ReposCompl Repos
+      \ call qutil#GetRepos()->qutil#CommandPass(<q-args>)->qutil#DropInQuickfix("Repos")
 """"""""""""""""""""""""""""""""""""""Repos""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""CmdCompl""""""""""""""""""""""""""""""""""""""" {{{
-function! CmdCompl(cmdline)
+function! qutil#CmdCompl(cmdline)
   let complete = 'complete -C ' . shellescape(a:cmdline)
   let output = system(["/usr/bin/fish", "-c", complete])
 
@@ -418,7 +392,7 @@ endfunction
 """"""""""""""""""""""""""""""""""""""CmdCompl""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Make""""""""""""""""""""""""""""""""""""""" {{{
-function! Make(...)
+function! qutil#Make(...)
   if has_key(g:statusline_dict, "make") && !empty(g:statusline_dict['make'])
     return -1
   endif
@@ -482,7 +456,7 @@ function! Make(...)
       call nvim_echo([["Make failed!", "ErrorMsg"]], v:true, #{})
     endif
     if exists("g:make_error_list") && len(g:make_error_list) > 0
-      call setqflist([], ' ', #{title: "Make", items: g:make_error_list})
+      call qutil#SetQuickfix("Make", g:make_error_list)
       copen
     endif
     silent! unlet g:make_error_list
@@ -524,35 +498,75 @@ function! s:OpenMarks(bang)
       let list += buf_marks
     endif
   endfor
-  call DisplayInQf(list, 'Marks')
+  call qutil#SetQuickfix(list, 'Marks')
 endfunction
 
 command! -nargs=0 -bang Mark call <SID>OpenMarks("<bang>")
 """"""""""""""""""""""""""""""""""""""Mark""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Cff""""""""""""""""""""""""""""""""""""""" {{{
-function! s:QuickfixFileFilt(bang, arg)
-  let expr = 'stridx(expand("#".v:val.bufnr.":p"), a:arg)'
-  if empty(a:bang)
-    let list = filter(getqflist(), expr . ' >= 0')
-  else
-    let list = filter(getqflist(), expr . ' < 0')
+
+function! s:CustomQuickfixFilter(bufnr, bang, arg)
+  let mod = getbufvar(a:bufnr, '&modifiable', v:null)
+  if !mod
+    echo "Not modifiable!"
+    return
   endif
-  call DisplayInQf(list, "Cff")
+
+  let expr =  'stridx(v:val, a:arg)'
+  if empty(a:bang)
+    let expr ..= ' >= 0'
+  else
+    let expr ..= ' < 0'
+  endif
+  let lines = filter(getbufline(a:bufnr, 1, '$'), expr)
+  call nvim_buf_set_lines(a:bufnr, 0, -1, v:false, lines)
 endfunction
 
-command! -nargs=1 -bang Cff call <SID>QuickfixFileFilt("<bang>", <q-args>)
+function! s:QuickfixFileFilter(bang, arg)
+  let winids = qutil#GetQuickfix()
+  if empty(winids)
+    return
+  endif
+  let bufnr = winbufnr(winids[0])
+  let is_custom = getbufvar(bufnr, 'custom_quickfix', v:null)
+
+  if is_custom
+    call s:CustomQuickfixFilter(bufnr, a:bang, a:arg)
+  else
+    let expr = 'stridx(expand("#".v:val.bufnr.":p"), a:arg)'
+    if empty(a:bang)
+      let list = filter(getqflist(), expr . ' >= 0')
+    else
+      let list = filter(getqflist(), expr . ' < 0')
+    endif
+    call qutil#SetQuickfix(list, "Cff")
+  endif
+endfunction
+
+command! -nargs=1 -bang Cff call <SID>QuickfixFileFilter("<bang>", <q-args>)
 """"""""""""""""""""""""""""""""""""""Cff""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Cf""""""""""""""""""""""""""""""""""""""" {{{
 function! s:QuickfixTextFilt(bang, arg)
-  let expr = 'stridx(v:val.text, a:arg)'
-  if empty(a:bang)
-    let list = filter(getqflist(), expr . ' >= 0')
-  else
-    let list = filter(getqflist(), expr . ' < 0')
+  let winids = qutil#GetQuickfix()
+  if empty(winids)
+    return
   endif
-  call DisplayInQf(list, "Cf")
+  let bufnr = winbufnr(winids[0])
+  let is_custom = getbufvar(bufnr, 'custom_quickfix', v:null)
+
+  if is_custom
+    call s:CustomQuickfixFilter(bufnr, a:bang, a:arg)
+  else
+    let expr = 'stridx(v:val.text, a:arg)'
+    if empty(a:bang)
+      let list = filter(getqflist(), expr . ' >= 0')
+    else
+      let list = filter(getqflist(), expr . ' < 0')
+    endif
+    call qutil#SetQuickfix(list, "Cf")
+  endif
 endfunction
 
 command! -nargs=1 -bang Cf call <SID>QuickfixTextFilt("<bang>", <q-args>)

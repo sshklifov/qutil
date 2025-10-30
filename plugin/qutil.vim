@@ -4,6 +4,49 @@ if exists(':Old')
   finish
 endif
 
+""""""""""""""""""""""""""""""""""""""Custom quickfix""""""""""""""""""""""""""""""""""""""" {{{
+function! qutil#CreateCommandQuickfix(lines, name, cmd)
+  if len(a:lines) <= 0
+    echo "No entries"
+    return -1
+  endif
+  call assert_true(type(a:lines[0]) == type(""))
+  call qutil#CloseQuickfix()
+
+  let nr = init#CustomBottomBuffer(a:name, a:lines)
+  call setbufvar(nr, '&modifiable', v:true)
+  resize 10
+  setlocal cursorline
+  exe "nnoremap <silent> <buffer> <CR> :" .. a:cmd .. '<CR>'
+  let b:custom_quickfix = 1
+  return nr
+endfunction
+
+function! qutil#CreateCustomQuickfix(lines, name, cb, ...)
+  let Cb = function(a:cb, a:000)
+  let cmd = "call " .. string(Cb) .. "()"
+  return qutil#CreateCommandQuickfix(a:lines, a:name, cmd)
+endfunction
+
+function! qutil#CreateOneShotQuickfix(lines, name, cb, ...)
+  if len(a:lines) == 1
+    let Cb = function(a:cb, a:000)
+    call Cb(a:items[0])
+    return -1
+  endif
+  return qutil#CreateCustomQuickfix(a:lines, a:name, '<SID>OneShotQuickfix', a:cb, a:000)
+endfunction
+
+function s:OneShotQuickfix(cb, args)
+  let entry = getline('.')
+  quit
+  let Partial = function(a:cb, a:args)
+  call Partial(entry)
+endfunction
+
+
+""""""""""""""""""""""""""""""""""""""Custom quickfix""""""""""""""""""""""""""""""""""""""" }}}
+
 """"""""""""""""""""""""""""""""""""""Functions""""""""""""""""""""""""""""""""""""""" {{{
 function! s:IsQuickfix(_, w)
   if a:w['tabnr'] != tabpagenr()
@@ -69,7 +112,9 @@ function! qutil#SetQuickfix(items, title, ...)
     endif
   else
     call setqflist([], ' ', #{title: a:title, items: items})
-    if !has_key(opts, 'hide')
+    if has_key(opts, 'hide')
+      cc 1
+    else
       copen
     endif
   endif
@@ -94,34 +139,46 @@ function! qutil#FileFilter(list, str, ...)
     let items = map(items, split(fnamemodify(item, ':p'), "/"))
     let exclude = ["home", $USER]
     let items = filter(res, "index(exclude, v:val) < 0")
+  endif
+  if has_key(opts, 'unique')
     let items = uniq(sort(items))
   endif
   if has_key(opts, 'sort')
-    let items = map(a:list, '[stridx(v:val, a:str), v:val]')
+    let items = map(items, '[stridx(v:val, a:str), v:val]')
     call filter(items, 'v:val[0] >= 0')
     call sort(items)
     let items = map(items, 'v:val[1]')
   else
     let items = filter(items, "stridx(v:val, a:str) >= 0")
   endif
-  if has_key(opts, 'oneshot')
-    if index(items, a:str) >= 0
-      let items = [a:str]
-    endif
-  endif
   return items
 endfunction
 
+function! qutil#BasenameFilter(list, str, ...)
+  let opts = get(a:000, 0, #{})
+  let ret = []
+  for item in a:list
+    let b = fnamemodify(item, ":t")
+    if has_key(opts, 'oneshot') && b ==# a:str
+      return [item]
+    endif
+    if stridx(b, a:str) >= 0
+      call add(ret, item)
+    endif
+  endfor
+  return ret
+endfunction
+
 function! qutil#FileCompletionPass(list, arg)
-  return qutil#FileFilter(a:list, a:arg, #{basename: 1, sort: 1})
+  return qutil#FileFilter(a:list, a:arg, #{basename: 1, sort: 1, unique: 1})
 endfunction
 
 function! qutil#ComponentCompletionPass(list, arg)
-  return qutil#FileFilter(a:list, a:arg, #{component: 1, sort: 1})
+  return qutil#FileFilter(a:list, a:arg, #{component: 1, sort: 1, unique: 1})
 endfunction
 
 function! qutil#CommandPass(list, arg)
-  return qutil#FileFilter(a:list, a:arg)
+  return qutil#BasenameFilter(a:list, a:arg, #{oneshot: 1})
 endfunction
 
 function! qutil#AddLinePreview(list)
@@ -332,7 +389,7 @@ endfunction
 function! s:CacheRepos()
   " Sanity check
   if !empty($GIT_CEILING_DIRECTORIES) || !empty($GIT_WORK_TREE) || !empty($GIT_DIR)
-    call init#Warn("Git environment variables detected (not supported)!")
+    call nvim_echo([["Git environment variables detected (not supported)!", "WarningMsg"]], v:true, #{})
     let s:repos = []
     return
   endif
@@ -456,7 +513,7 @@ function! qutil#Make(...)
       call nvim_echo([["Make failed!", "ErrorMsg"]], v:true, #{})
     endif
     if exists("g:make_error_list") && len(g:make_error_list) > 0
-      call qutil#SetQuickfix("Make", g:make_error_list)
+      call qutil#SetQuickfix(g:make_error_list, "Make")
       copen
     endif
     silent! unlet g:make_error_list
@@ -471,7 +528,7 @@ function! qutil#Make(...)
   if bang == ""
     let g:make_error_list = []
     let opts = #{cwd: FugitiveWorkTree(), on_stdout: funcref("s:OnStdout"), on_stderr: funcref("s:OnStderr"), on_exit: funcref("s:OnExit")}
-    return jobstart(command, opts)
+    return init#Jobstart(command, opts)
   else
     bot new
     let id = termopen(command, #{cwd: FugitiveWorkTree(), on_exit: funcref("s:OnExit")})

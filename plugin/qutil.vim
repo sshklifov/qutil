@@ -31,7 +31,7 @@ endfunction
 function! qutil#CreateOneShotQuickfix(lines, name, cb, ...)
   if len(a:lines) == 1
     let Cb = function(a:cb, a:000)
-    call Cb(a:items[0])
+    call Cb(a:lines[0])
     return -1
   endif
   return qutil#CreateCustomQuickfix(a:lines, a:name, '<SID>OneShotQuickfix', a:cb, a:000)
@@ -63,22 +63,22 @@ function! s:IsQuickfix(_, w)
   return getbufvar(bufnr, 'custom_quickfix', v:null)
 endfunction
 
-function! qutil#GetQuickfix()
+function! qutil#GetQuickfixWins()
   let wininfos = filter(getwininfo(), function('s:IsQuickfix'))
   return map(wininfos, 'v:val.winid')
 endfunction
 
 function! qutil#IsQuickfixOpen()
-  return !empty(qutil#GetQuickfix())
+  return !empty(qutil#GetQuickfixWins())
 endfunction
 
 function! qutil#IsQuickfix()
-  let matches = qutil#GetQuickfix()
+  let matches = qutil#GetQuickfixWins()
   return !empty(filter(matches, 'v:val == win_getid()'))
 endfunction
 
 function! qutil#CloseQuickfix()
-  for winid in qutil#GetQuickfix()
+  for winid in qutil#GetQuickfixWins()
     call nvim_win_close(winid, v:false)
   endfor
 endfunction
@@ -120,6 +120,39 @@ function! qutil#SetQuickfix(items, title, ...)
   endif
 endfunction
 
+function! qutil#MapQuickfix(Cb)
+  let winids = qutil#GetQuickfixWins()
+  if empty(winids)
+    return []
+  endif
+  let bufnr = winbufnr(winids[0])
+  let is_custom = getbufvar(bufnr, 'custom_quickfix', v:null)
+
+  if is_custom
+    return map(getbufline(a:bufnr, 1, '$'), 'a:Cb(#{text: v:val})')
+  else
+    return map(getqflist(), 'a:Cb(v:val)')
+  endif
+endfunction
+
+function! qutil#FilterQuickfix(Cb)
+  let winids = qutil#GetQuickfixWins()
+  if empty(winids)
+    return []
+  endif
+  let bufnr = winbufnr(winids[0])
+  let is_custom = getbufvar(bufnr, 'custom_quickfix', v:null)
+
+  if is_custom
+    let lines = filter(getbufline(bufnr, 1, '$'), 'a:Cb(#{text: v:val})')
+    call nvim_buf_set_lines(bufnr, 0, -1, v:false, lines)
+  else
+    let list = getqflist(#{items: 1, title: 1})
+    let list = filter(list.items, 'a:Cb(v:val)')
+    call setqflist([], ' ', list)
+  endif
+endfunction
+
 function! qutil#DropInQuickfix(items, title)
   return qutil#SetQuickfix(a:items, a:title, #{oneshot: v:true})
 endfunction
@@ -136,9 +169,9 @@ function! qutil#FileFilter(list, str, ...)
     let items = map(items, 'fnamemodify(v:val, ":t")')
   endif
   if has_key(opts, 'component')
-    let items = map(items, split(fnamemodify(item, ':p'), "/"))
+    let items = flatten(map(items, 'split(fnamemodify(v:val, ":p"), "/")'))
     let exclude = ["home", $USER]
-    let items = filter(res, "index(exclude, v:val) < 0")
+    let items = filter(items, "index(exclude, v:val) < 0")
   endif
   if has_key(opts, 'unique')
     let items = uniq(sort(items))
@@ -221,7 +254,7 @@ command -nargs=? -bang -complete=customlist,qutil#OldCompl Old call s:GetOldFile
 function! s:DeleteQfEntries(a, b)
   let view = winsaveview()
   let qflist = filter(getqflist(), {i, _ -> i+1 < a:a || i+1 > a:b})
-  call qutil#SetQuickfix('Cdelete', qflist)
+  call qutil#SetQuickfix(qflist, 'Cdelete')
   call winrestview(view)
 endfunction
 
@@ -347,7 +380,7 @@ function! s:UniqueQuickfix()
   call uniq(sort(qf, Cmp), Cmp)
   call sort(qf, {a, b -> a.key - b.key})
   call map(qf, 'v:val.value')
-  call qutil#SetQuickfix("Unique", qf)
+  call qutil#SetQuickfix(qf, "Unique")
 endfunction
 
 command! -nargs=0 Unique call s:UniqueQuickfix() 
@@ -477,7 +510,7 @@ function! qutil#Make(...)
           let col = m[3]
           let text = m[4]
           if filereadable(file)
-            let types = ["error:", "warning:"]
+            let types = ["error:", "warning:", "required from here"]
             let matched_types = filter(types, "stridx(text, v:val) >= 0")
             if !empty(matched_types)
               let item = #{filename: file, text: text, lnum: lnum, col: col}
@@ -581,7 +614,7 @@ function! s:CustomQuickfixFilter(bufnr, bang, arg)
 endfunction
 
 function! s:QuickfixFileFilter(bang, arg)
-  let winids = qutil#GetQuickfix()
+  let winids = qutil#GetQuickfixWins()
   if empty(winids)
     return
   endif
@@ -606,7 +639,7 @@ command! -nargs=1 -bang Cff call <SID>QuickfixFileFilter("<bang>", <q-args>)
 
 """"""""""""""""""""""""""""""""""""""Cf""""""""""""""""""""""""""""""""""""""" {{{
 function! s:QuickfixTextFilt(bang, arg)
-  let winids = qutil#GetQuickfix()
+  let winids = qutil#GetQuickfixWins()
   if empty(winids)
     return
   endif

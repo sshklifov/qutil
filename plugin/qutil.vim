@@ -482,7 +482,7 @@ endfunction
 """"""""""""""""""""""""""""""""""""""CmdCompl""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Make""""""""""""""""""""""""""""""""""""""" {{{
-function! qutil#Make(...)
+function! qutil#Make(command, ...)
   if has_key(g:statusline_dict, "make") && !empty(g:statusline_dict['make'])
     return -1
   endif
@@ -518,7 +518,7 @@ function! qutil#Make(...)
             endif
           endif
         endif
-        let m = matchlist(text, '\(.*\):\([0-9]\+\): \(.*\)')
+        let m = matchlist(text, '\(.*\):\([0-9]\+\):\s*\(.*\)')
         if len(m) >= 4
           let file = m[1]
           let lnum = m[2]
@@ -553,11 +553,11 @@ function! qutil#Make(...)
     let g:statusline_dict['make'] = ''
   endfunction
 
-  let command = get(a:, 1, "")
+  let command = a:command
   if empty(command)
-    return
+    return init#Warn("Empty command supplied"!)
   endif
-  let bang = get(a:, 2, "")
+  let bang = get(a:000, 0, "")
   if bang == ""
     let g:make_error_list = []
     let opts = #{cwd: FugitiveWorkTree(), on_stdout: funcref("s:OnStdout"), on_stderr: funcref("s:OnStderr"), on_exit: funcref("s:OnExit")}

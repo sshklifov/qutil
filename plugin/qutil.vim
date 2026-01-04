@@ -555,7 +555,7 @@ function! qutil#Make(command, ...)
 
   let command = a:command
   if empty(command)
-    return init#Warn("Empty command supplied"!)
+    return init#Warn("Empty command supplied")
   endif
   let bang = get(a:000, 0, "")
   if bang == ""

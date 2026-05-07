@@ -518,88 +518,98 @@ function! qutil#Make(command, ...)
     return -1
   endif
 
-  function! s:OnStdout(id, data, event)
-    for data in a:data
-      let text = substitute(data, '\n', '', 'g')
-      if len(text) > 0
-        let m = matchlist(text, '\[ *\([0-9]\+%\)\]')
-        if len(m) > 1 && !empty(m[1])
-          let g:statusline_dict['make'] = m[1]
-        endif
-      endif
-    endfor
-  endfunction
-
-  function! s:OnStderr(id, data, event)
-    for data in a:data
-      let text = substitute(data, '\n', '', 'g')
-      if len(text) > 0
-        let m = matchlist(text, '\(.*\):\([0-9]\+\):\([0-9]\+\): \(.*\)')
-        if len(m) >= 5
-          let file = m[1]
-          let lnum = m[2]
-          let col = m[3]
-          let text = m[4]
-          if filereadable(file)
-            let types = ["error:", "warning:", "required from here"]
-            let matched_types = filter(types, "stridx(text, v:val) >= 0")
-            if !empty(matched_types)
-              let item = #{filename: file, text: text, lnum: lnum, col: col}
-              call add(g:make_error_list, item)
-            endif
-          endif
-        endif
-        let m = matchlist(text, '\(.*\):\([0-9]\+\):\s*\(.*\)')
-        if len(m) >= 4
-          let file = m[1]
-          let lnum = m[2]
-          let text = m[3]
-          if filereadable(file)
-            let types = ["undefined reference"]
-            let matched_types = filter(types, "stridx(text, v:val) >= 0")
-            if !empty(matched_types)
-              let item = #{filename: file, text: text, lnum: lnum}
-              call add(g:make_error_list, item)
-            endif
-          endif
-        endif
-      endif
-    endfor
-  endfunction
-
-  function! s:OnExit(id, code, event)
-    if a:code == 0
-      echom "Make successful!"
-      if exists('#User#MakeSuccessful')
-        doauto <nomodeline> User MakeSuccessful
-      endif
-    else
-      call nvim_echo([["Make failed!", "ErrorMsg"]], v:true, #{})
-    endif
-    if exists("g:make_error_list") && len(g:make_error_list) > 0
-      call qutil#SetQuickfix(g:make_error_list, "Make")
-      copen
-    endif
-    silent! unlet g:make_error_list
-    let g:statusline_dict['make'] = ''
-  endfunction
+  let opts = get(a:000, 0, #{})
 
   let command = a:command
   if empty(command)
     return init#Warn("Empty command supplied")
   endif
-  let bang = get(a:000, 0, "")
-  if bang == ""
+
+  const preview = get(opts, "preview", v:false)
+  if !preview
     let g:make_error_list = []
-    let opts = #{cwd: FugitiveWorkTree(), on_stdout: funcref("s:OnStdout"), on_stderr: funcref("s:OnStderr"), on_exit: funcref("s:OnExit")}
-    return init#Jobstart(command, opts)
+    let job_callbacks = #{cwd: FugitiveWorkTree(),
+          \ on_stdout: function("s:OnMakeStdout"),
+          \ on_stderr: function("s:OnMakeStderr"),
+          \ on_exit: function("s:OnMakeExit", [opts])
+          \ }
+    return init#Jobstart(command, job_callbacks)
   else
     bot new
-    let id = termopen(command, #{cwd: FugitiveWorkTree(), on_exit: funcref("s:OnExit")})
+    let id = termopen(command, #{cwd: FugitiveWorkTree(), on_exit: function("s:OnMakeExit", [opts])})
     call cursor("$", 1)
     return id
   endif
 endfunction
+
+function! s:OnMakeStdout(_0, data, _1)
+  for data in a:data
+    let text = substitute(data, '\n', '', 'g')
+    if len(text) > 0
+      let m = matchlist(text, '\[ *\([0-9]\+%\)\]')
+      if len(m) > 1 && !empty(m[1])
+        let g:statusline_dict['make'] = m[1]
+      endif
+    endif
+  endfor
+endfunction
+
+function! s:OnMakeStderr(_0, data, _1)
+  for data in a:data
+    let text = substitute(data, '\n', '', 'g')
+    if len(text) > 0
+      let m = matchlist(text, '\(.*\):\([0-9]\+\):\([0-9]\+\): \(.*\)')
+      if len(m) >= 5
+        let file = m[1]
+        let lnum = m[2]
+        let col = m[3]
+        let text = m[4]
+        if filereadable(file)
+          let types = ["error:", "warning:", "required from here"]
+          let matched_types = filter(types, "stridx(text, v:val) >= 0")
+          if !empty(matched_types)
+            let item = #{filename: file, text: text, lnum: lnum, col: col}
+            call add(g:make_error_list, item)
+          endif
+        endif
+      endif
+      let m = matchlist(text, '\(.*\):\([0-9]\+\):\s*\(.*\)')
+      if len(m) >= 4
+        let file = m[1]
+        let lnum = m[2]
+        let text = m[3]
+        if filereadable(file)
+          let types = ["undefined reference"]
+          let matched_types = filter(types, "stridx(text, v:val) >= 0")
+          if !empty(matched_types)
+            let item = #{filename: file, text: text, lnum: lnum}
+            call add(g:make_error_list, item)
+          endif
+        endif
+      endif
+    endif
+  endfor
+endfunction
+
+function! s:OnMakeExit(opts, _0, code, _1)
+  if a:code == 0
+    echom "Make successful!"
+    if has_key(a:opts, "on_success")
+      let args = get(a:opts, "args", [])
+      let Cb = function(a:opts["on_success"], args)
+      call Cb()
+    endif
+  else
+    call nvim_echo([["Make failed!", "ErrorMsg"]], v:true, #{})
+  endif
+  if exists("g:make_error_list") && len(g:make_error_list) > 0
+    call qutil#SetQuickfix(g:make_error_list, "Make")
+    copen
+  endif
+  silent! unlet g:make_error_list
+  let g:statusline_dict['make'] = ''
+endfunction
+
 """"""""""""""""""""""""""""""""""""""Make""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""""""""""""""""Mark""""""""""""""""""""""""""""""""""""""" {{{

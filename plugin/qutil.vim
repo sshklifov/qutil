@@ -44,6 +44,37 @@ function s:OneShotQuickfix(cb, args)
   call Partial(entry)
 endfunction
 
+function qutil#CreateMultiQuickfix(lines, enabled, name, cb, ...)
+  let nr = qutil#CreateCustomQuickfix(a:lines, a:name, function('s:OnMultiQuickfixToggle'))
+  let ns = nvim_create_namespace('multi_quickfix')
+  for idx in range(len(a:enabled))
+    let hl = a:enabled[idx] ? 'DiagnosticOk' : 'DiagnosticUnnecessary'
+    call nvim_buf_set_extmark(nr, ns, idx, 0, #{line_hl_group: hl})
+  endfor
+  call init#OnBufDelete(nr, function("s:OnMultiQuickfixExit", [a:cb, a:000]))
+endfunction
+
+function! s:OnMultiQuickfixToggle()
+  let idx = line('.') - 1
+  let nr = bufnr()
+  let ns = nvim_create_namespace('multi_quickfix')
+  let extmark = nvim_buf_get_extmarks(nr, ns, [idx, 0], [idx, 0], #{details: 1})[0]
+  call nvim_buf_del_extmark(nr, ns, extmark[0])
+  let old_hl = extmark[3]["line_hl_group"]
+  let new_hl = old_hl == 'DiagnosticOk' ? 'DiagnosticUnnecessary' : 'DiagnosticOk'
+  call nvim_buf_set_extmark(nr, ns, idx, 0, #{line_hl_group: new_hl})
+endfunction
+
+function! s:OnMultiQuickfixExit(cb, args)
+  let lines = line('$')
+  let nr = str2nr(expand("<abuf>"))
+  let ns = nvim_create_namespace('multi_quickfix')
+  let extmarks = nvim_buf_get_extmarks(nr, ns, [0, 0], [lines, 0], #{details: 1})
+  let enabled = map(extmarks, 'v:val[3].line_hl_group == "DiagnosticOk"')
+
+  let Cb = function(a:cb, a:args)
+  call Cb(enabled)
+endfunction
 
 """"""""""""""""""""""""""""""""""""""Custom quickfix""""""""""""""""""""""""""""""""""""""" }}}
 

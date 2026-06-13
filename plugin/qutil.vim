@@ -142,8 +142,13 @@ function! qutil#SetQuickfix(items, title, ...)
       exe printf("normal %d|", item.col)
     endif
   else
+    if has_key(opts, 'dir')
+      copen
+      exe "lcd " .. opts['dir']
+    endif
     call setqflist([], ' ', #{title: a:title, items: items})
     if has_key(opts, 'hide')
+      cclose
       cc 1
     else
       copen
@@ -369,29 +374,6 @@ nnoremap <silent> <leader>ch <cmd>call <SID>GetChangeList()->qutil#AddLinePrevie
 
 """"""""""""""""""""""""""""""""""""""JumpList""""""""""""""""""""""""""""""""""""""" }}}
 
-""""""""""""""""""""""""""""""""""""""ShowBuffers""""""""""""""""""""""""""""""""""""""" {{{
-function! s:ShowBuffers(pat)
-  let items = []
-  for bufnr in range(1, bufnr('$'))
-    let name = expand('#' .. bufnr .. ':p')
-    if !filereadable(name) || stridx(name, a:pat) < 0
-      continue
-    endif
-
-    let bufinfo = getbufinfo(bufnr)[0]
-    let lnum = bufinfo["lnum"]
-    let text = string(bufnr)
-    if bufinfo["changed"]
-      let text = text . " (modified)"
-    endif
-    call add(items, #{bufnr: a:n, text: text, lnum: lnum})
-  endfor
-  call qutil#DropInQuickfix(items, "Buffers")
-endfunction
-
-nnoremap <silent> <leader>buf :call <SID>ShowBuffers("")<CR>
-""""""""""""""""""""""""""""""""""""""ShowBuffers""""""""""""""""""""""""""""""""""""""" }}}
-
 """"""""""""""""""""""""""""""""""""""Modified""""""""""""""""""""""""""""""""""""""" {{{
 function! s:GetModified()
   let infos = filter(getbufinfo(), "v:val.changed")
@@ -536,7 +518,7 @@ function! qutil#Make(command, ...)
     return init#Jobstart(command, job_callbacks)
   else
     bot new
-    let id = termopen(command, #{cwd: FugitiveWorkTree(), on_exit: function("s:OnMakeExit", [opts])})
+    let id = init#Termopen(command, #{cwd: FugitiveWorkTree(), on_exit: function("s:OnMakeExit", [opts])})
     call cursor("$", 1)
     return id
   endif

@@ -10,7 +10,6 @@ function! qutil#CreateCommandQuickfix(lines, name, cmd)
     echo "No entries"
     return -1
   endif
-  call assert_true(type(a:lines[0]) == type(""))
   call qutil#CloseQuickfix()
 
   let nr = init#CustomBottomBuffer(a:name, a:lines)
@@ -48,7 +47,7 @@ function qutil#CreateMultiQuickfix(lines, enabled, name, cb, ...)
   let nr = qutil#CreateCustomQuickfix(a:lines, a:name, function('s:OnMultiQuickfixToggle'))
   let ns = nvim_create_namespace('multi_quickfix')
   for idx in range(len(a:enabled))
-    let hl = a:enabled[idx] ? 'DiagnosticOk' : 'DiagnosticUnnecessary'
+    let hl = a:enabled[idx] ? 'Normal' : 'DiagnosticUnnecessary'
     call nvim_buf_set_extmark(nr, ns, idx, 0, #{line_hl_group: hl})
   endfor
   call init#OnBufDelete(nr, function("s:OnMultiQuickfixExit", [a:cb, a:000]))
@@ -61,7 +60,7 @@ function! s:OnMultiQuickfixToggle()
   let extmark = nvim_buf_get_extmarks(nr, ns, [idx, 0], [idx, 0], #{details: 1})[0]
   call nvim_buf_del_extmark(nr, ns, extmark[0])
   let old_hl = extmark[3]["line_hl_group"]
-  let new_hl = old_hl == 'DiagnosticOk' ? 'DiagnosticUnnecessary' : 'DiagnosticOk'
+  let new_hl = old_hl == 'Normal' ? 'DiagnosticUnnecessary' : 'Normal'
   call nvim_buf_set_extmark(nr, ns, idx, 0, #{line_hl_group: new_hl})
 endfunction
 

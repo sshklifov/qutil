@@ -27,6 +27,16 @@ function! qutil#CreateCustomQuickfix(lines, name, cb, ...)
   return qutil#CreateCommandQuickfix(a:lines, a:name, cmd)
 endfunction
 
+" Per-entry payload, one element per line. Kept aligned with the buffer lines
+" across quickfix filtering (see s:CustomQuickfixFilter).
+function! qutil#SetLineData(nr, data)
+  call setbufvar(a:nr, 'qutil_line_data', a:data)
+endfunction
+
+function! qutil#GetLineData()
+  return getbufvar(bufnr(), 'qutil_line_data', [])[line('.') - 1]
+endfunction
+
 function! qutil#CreateOneShotQuickfix(lines, name, cb, ...)
   if len(a:lines) == 1
     let Cb = function(a:cb, a:000)
@@ -631,8 +641,26 @@ function! s:CustomQuickfixFilter(bufnr, bang, arg)
   else
     let expr ..= ' < 0'
   endif
-  let lines = filter(getbufline(a:bufnr, 1, '$'), expr)
-  call nvim_buf_set_lines(a:bufnr, 0, -1, v:false, lines)
+
+  " Delete non-matching lines one at a time (bottom-to-top so indices stay
+  " valid). A single-line deletion shifts the extmarks below it up with their
+  " lines, so surviving highlights are preserved. We clear the dropped line's
+  " marks first (across all namespaces, hence -1) so they can't collapse onto
+  " a surviving neighbour. Replacing the whole buffer at once would instead
+  " collapse every mark toward row 0.
+  let keep = map(getbufline(a:bufnr, 1, '$'), expr)
+  for idx in reverse(range(len(keep)))
+    if !keep[idx]
+      call nvim_buf_clear_namespace(a:bufnr, -1, idx, idx + 1)
+      call nvim_buf_set_lines(a:bufnr, idx, idx + 1, v:false, [])
+    endif
+  endfor
+
+  " Keep any per-entry payload (see qutil#SetLineData) aligned with the surviving lines.
+  let data = getbufvar(a:bufnr, 'qutil_line_data', v:null)
+  if type(data) == v:t_list
+    call setbufvar(a:bufnr, 'qutil_line_data', filter(data, 'keep[v:key]'))
+  endif
 endfunction
 
 function! s:QuickfixFileFilter(bang, arg)

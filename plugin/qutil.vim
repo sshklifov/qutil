@@ -14,11 +14,50 @@ function! qutil#CreateCommandQuickfix(lines, name, cmd)
 
   let nr = init#CustomBottomBuffer(a:name, a:lines)
   call setbufvar(nr, '&modifiable', v:true)
+  call setbufvar(nr, '&bufhidden', 'hide')
+  exe printf('autocmd BufHidden <buffer=%d> call s:StashCustomQuickfix(%d)', nr, nr)
   resize 10
   setlocal cursorline
   exe "nnoremap <silent> <buffer> <CR> :" .. a:cmd .. '<CR>'
   let b:custom_quickfix = 1
+  let s:last_qf_was_custom = v:true
   return nr
+endfunction
+
+" Retain the most recently hidden custom quickfix, wiping the previous one.
+function! s:StashCustomQuickfix(buf)
+  if exists('s:prev_qf') && s:prev_qf != a:buf && bufexists(s:prev_qf)
+    exe 'bwipeout! ' .. s:prev_qf
+  endif
+  let s:prev_qf = a:buf
+endfunction
+
+" Toggle back to the previous custom quickfix, ping-ponging between the two most recent.
+function! s:RestoreCustomQuickfix()
+  if !exists('s:prev_qf') || !bufexists(s:prev_qf)
+    echo "No previous quickfix"
+    return
+  endif
+  let target = s:prev_qf
+  " Drop the reference so closing the current qf (which fires BufHidden ->
+  " s:StashCustomQuickfix) won't wipe the buffer we're about to open.
+  unlet s:prev_qf
+
+  call qutil#CloseQuickfix()
+  bot sp
+  exe "b " .. target
+  resize 10
+  setlocal cursorline
+endfunction
+
+" Reopen whichever quickfix was shown most recently: the last custom quickfix
+" or the native list.
+function! qutil#RestoreQuickfix()
+  if get(s:, 'last_qf_was_custom', v:false)
+    call s:RestoreCustomQuickfix()
+  else
+    copen
+  endif
 endfunction
 
 function! qutil#CreateCustomQuickfix(lines, name, cb, ...)
@@ -53,6 +92,9 @@ function s:OneShotQuickfix(cb, args)
   call Partial(entry)
 endfunction
 
+" TODO: s:StashCustomQuickfix keeps this buffer alive (bufhidden=hide) for
+" s:RestoreCustomQuickfix, so this OnBufDelete callback now fires only when the
+" buffer is actually wiped, not when you switch away from it.
 function qutil#CreateMultiQuickfix(lines, enabled, name, cb, ...)
   let nr = qutil#CreateCustomQuickfix(a:lines, a:name, function('s:OnMultiQuickfixToggle'))
   let ns = nvim_create_namespace('multi_quickfix')
@@ -156,6 +198,7 @@ function! qutil#SetQuickfix(items, title, ...)
       exe "lcd " .. opts['dir']
     endif
     call setqflist([], ' ', #{title: a:title, items: items})
+    let s:last_qf_was_custom = v:false
     if has_key(opts, 'hide')
       cclose
       cc 1

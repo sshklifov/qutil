@@ -687,13 +687,13 @@ function! s:QuickfixFileFilter(bang, arg)
   if is_custom
     call s:CustomQuickfixFilter(bufnr, a:bang, a:arg)
   else
-    let expr = 'stridx(expand("#".v:val.bufnr.":p"), a:arg)'
-    if empty(a:bang)
-      let list = filter(getqflist(), expr . ' >= 0')
-    else
-      let list = filter(getqflist(), expr . ' < 0')
+    " The window shows the module in place of the file name, so match either
+    let expr = 'stridx(expand("#".v:val.bufnr.":p"), a:arg) >= 0'
+          \ .. ' || stridx(get(v:val, "module", ""), a:arg) >= 0'
+    if !empty(a:bang)
+      let expr = '!(' .. expr .. ')'
     endif
-    call qutil#SetQuickfix(list, "Cff")
+    call qutil#SetQuickfix(filter(getqflist(), expr), "Cff")
   endif
 endfunction
 

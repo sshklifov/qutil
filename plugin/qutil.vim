@@ -67,6 +67,48 @@ endfunction
 
 """"""""""""""""""""""""""""""""""""""Custom quickfix""""""""""""""""""""""""""""""""""""""" }}}
 
+""""""""""""""""""""""""""""""""""""""Lazy quickfix""""""""""""""""""""""""""""""""""""""" {{{
+" A native quickfix whose entries are scheme://key buffers, filled on the jump to
+" them. Items are #{key: "SW-5310", text: "[Backlog] fix it", data: <anything>}.
+" Render(name, data) returns the text as lines or as one string, and runs with the
+" buffer current, so it can setlocal whatever it wants on top.
+"
+" The renderer goes in the list's context and every payload in its own entry, so
+" nothing outlives the list.
+function! qutil#SetLazyQuickfix(items, title, scheme, Render)
+  if a:scheme !~# '^\a\w*$'
+    throw "Bad lazy quickfix scheme: " .. a:scheme
+  endif
+  exe printf("augroup qutil_%s", a:scheme)
+  autocmd!
+  exe printf('autocmd BufReadCmd %s://* call s:ReadLazy()', a:scheme)
+  exe printf('autocmd BufWriteCmd %s://* echo "%s are read only!"', a:scheme, a:title)
+  augroup END
+
+  let items = map(copy(a:items), printf('#{filename: "%s://" .. v:val.key, lnum: 1,
+        \ text: get(v:val, "text", v:val.key), user_data: get(v:val, "data", #{})}', a:scheme))
+  call qutil#SetQuickfix(items, a:title, #{context: #{render: a:Render}})
+endfunction
+
+" No buftype: a quickfix jump only reuses a window whose buffer has an empty one,
+" anything else opens a split per jump.
+function! s:ReadLazy()
+  setlocal bufhidden=hide noswapfile modifiable
+  let ctx = getqflist(#{context: 1})['context']
+  let Render = type(ctx) == v:t_dict ? get(ctx, "render", v:null) : v:null
+  let entries = filter(getqflist(), 'v:val.bufnr == bufnr()')
+  if Render is v:null || empty(entries)
+    call setline(1, printf("%s is not in the quickfix anymore.", expand("<afile>")))
+  else
+    let lines = Render(expand("<afile>"), get(entries[0], "user_data", #{}))
+    " A line holding a newline would land in the buffer as a NUL.
+    let lines = type(lines) == v:t_string ? [lines] : lines
+    call setline(1, flattennew(map(copy(lines), 'split(v:val, "\n", v:true)')))
+  endif
+  setlocal nomodified nomodifiable readonly
+endfunction
+""""""""""""""""""""""""""""""""""""""Lazy quickfix""""""""""""""""""""""""""""""""""""""" }}}
+
 """"""""""""""""""""""""""""""""""""""Functions""""""""""""""""""""""""""""""""""""""" {{{
 function! s:IsQuickfix(_, w)
   if a:w['tabnr'] != tabpagenr()
@@ -136,7 +178,11 @@ function! qutil#SetQuickfix(items, title, ...)
       exe "lcd " .. opts['dir']
     endif
     const action = has_key(opts, 'replace') ? 'r' : ' '
-    call setqflist([], action, #{title: a:title, items: items})
+    let props = #{title: a:title, items: items}
+    if has_key(opts, 'context')
+      let props['context'] = opts['context']
+    endif
+    call setqflist([], action, props)
     if has_key(opts, 'hide')
       cclose
       cc 1
